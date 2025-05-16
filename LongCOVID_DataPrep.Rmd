@@ -1,0 +1,4702 @@
+---
+title: "Post-COVID Final Script"
+author: "Halee Staggs"
+date: "2023-11-01"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+    cache       = TRUE,    
+    fig.align   = 'center', 
+    fig.path    = 'figs/',  
+    results     = 'asis',   
+    echo        = TRUE,    
+    message     = FALSE,     
+    strip.white = TRUE,   
+    warning     = FALSE)   
+```
+
+# Set Working Directory
+```{r}
+setwd("~/Post COVID Study/Gorilla Data")
+```
+
+# Set Seed
+```{r}
+set.seed(8)
+```
+
+# Load Packages
+```{r}
+#install.packages('tidyverse')
+library(tidyverse)
+#install.packages('data.table')
+library(data.table)
+#install.packages('corrplot')
+library(corrplot)
+#install.packages('ggpubr')
+library(ggpubr)
+#install.packages('Hmisc')
+library(Hmisc)
+#install.packages('factoextra')
+library(factoextra)
+#install.packages('MatchIt')
+library(MatchIt)
+#install.packages('knitr')
+library(knitr)
+```
+
+# Cleaning Pipeline to Standardize/Normalize Gorilla Data Output Files:
+# Gorilla uses a lot of special characters and spaces in their data output files which is not R-friendly
+### First remove spaces and special characters from Gorilla data feature names
+### Remove space function
+```{r}
+# Iterate over all files to remove spaces from column names))
+directory_path <- "~/Post COVID Study/Gorilla Data"
+
+# Function to remove spaces from column names in CSV files within a directory
+#remove_spaces_from_column_names <- function(directory_path) {
+  # List all CSV files in the specified directory
+  #csv_files <- list.files(directory_path, pattern = "\\.csv$", full.names = TRUE, recursive = T)
+  
+  # Loop through each CSV file and remove spaces from column names
+  #for (file_path in csv_files) {
+    # Read the CSV file
+    #data <- read_csv(file_path)
+    
+    # Remove spaces from column names
+    #colnames(data) <- gsub("\\s", "", colnames(data))
+    
+    # Rewrite the modified data back to the CSV file
+    #write_csv(data, file_path)
+    #cat("Spaces removed from column names in file:", file_path, "\n")
+  #}
+#}
+
+# Call the function to remove spaces from column names in CSV files
+#remove_spaces_from_column_names(directory_path)
+```
+
+### Remove special character function
+```{R}
+# Function to remove spaces from column names in CSV files within a directory
+#remove_chars_from_column_names <- function(directory_path) {
+  # List all CSV files in the specified directory
+  #csv_files <- list.files(directory_path, pattern = "\\.csv$", full.names = TRUE, recursive = T)
+  
+  # Loop through each CSV file and remove spaces from column names
+  #for (file_path in csv_files) {
+    # Read the CSV file
+    #data <- read_csv(file_path)
+    
+    # Remove spaces from column names
+    #colnames(data) <- gsub("-", "", colnames(data))
+    
+    # Rewrite the modified data back to the CSV file
+    #write_csv(data, file_path)
+    #cat("Characters removed from column names in file:", file_path, "\n")
+  #}
+#}
+
+# Call the function to remove spaces from column names in CSV files
+#remove_chars_from_column_names(directory_path)
+```
+
+
+## Create lists of desired feature names from raw output files for each cognitive task in the Gorilla battery
+```{r}
+vs_cols <- c('ExperimentID' , 'ParticipantPublicID', 'TaskName', 'ZoneType', 
+             'ReactionTime', 'Correct', 'display', 'Image', 'Answer')
+ty_cols <- c('ExperimentID', 'ParticipantPublicID', 'TaskName', 'ZoneType',
+             'ReactionTime', 'Correct')
+rat_cols <- c('ExperimentID', 'ParticipantPublicID', 'TaskName', 'ZoneType',
+              'ReactionTime', 'Correct', 'Difficulty')
+id_cols <- c('ExperimentID', 'ParticipantPublicID', 'response3')
+fl_cols <- c('ExperimentID', 'ParticipantPublicID', 'TaskName', 'ZoneType',
+             'ReactionTime', 'Correct', 'Type')
+ds_cols <- c('ExperimentID', 'ParticipantPublicID', 'TaskName', 'ZoneType',
+             'ReactionTime', 'Correct')
+cpt_cols <- c('ExperimentID', 'ParticipantPublicID', 'TaskName', 'ScreenName',
+              'ZoneName', 'ZoneType', 'ReactionTime', 'Response', 'Attempt',
+              'TimedOut', 'display', 'number', 'correct', 'type', 'TrialNumber')
+
+# List of Gorilla-assigned task names
+vs_task <- c('dpqv')
+ty_task1 <- c('usrd')
+ty_task2 <- c('pgsa')
+ty_task3 <- c('2cdk')
+rat_task <- c('6rif')
+id_task1 <- c('su4q')
+id_task2 <- c('a4fd')
+id_task3 <- c('a1o3')
+fl_task <- c('l7az')
+ds_task <- c('h7je')
+cpt_task1 <- c('atji')
+cpt_task2 <- c('tl53')
+```
+
+## Function to extract specified columns from files containing a SINGLE specified string in their names within a directory
+```{r}
+extract_columns_from_files_with_1_string <- function(directory_path, string_to_find, columns_to_extract) {
+  # List all files in the directory
+  all_files <- list.files(directory_path, full.names = TRUE, recursive = T)
+  
+  # Initialize an empty dataframe to aggregate extracted data
+  aggregated_data <- data.frame()
+  
+  # Loop through each file in the directory
+  for (file_path in all_files) {
+    # Check if the specified string is present in the file name
+    if (grepl(string_to_find, file_path)) {
+      # Read the file
+      data <- read_csv(file_path)  # Read files as character datatypes
+      
+      # Extract specified columns
+      extracted_data <- data[ , (names(data) %in% columns_to_extract)]
+      
+      # Append extracted data to the aggregated dataframe
+      aggregated_data <- bind_rows(aggregated_data, extracted_data %>% mutate_if(is.double, as.character))
+    }
+  }
+
+  # Return the aggregated dataframe
+  return(aggregated_data)
+}
+```
+
+
+# Visual Search Extract
+```{r}
+string_to_find <- vs_task # Specify the string to find in file names
+columns_to_extract <- vs_cols  # Specify list of columns to extract
+
+# Call the function
+vs_df <- extract_columns_from_files_with_1_string(directory_path, string_to_find, columns_to_extract)
+#View(vs_df)
+#str(vs_df)
+```
+
+# Typing test extract - 1
+```{r}
+string_to_find <- ty_task1 # Specify the string to find in file names
+columns_to_extract <- ty_cols  # Specify list of columns to extract
+# Call the function
+ty1_df <- extract_columns_from_files_with_1_string(directory_path, string_to_find, columns_to_extract)
+#View(ty1_df)
+#str(ty1_df)
+```
+
+# Typing test extract - 2
+```{r}
+string_to_find <- ty_task2 # Specify the string to find in file names
+columns_to_extract <- ty_cols  # Specify list of columns to extract
+# Call the function
+ty2_df <- extract_columns_from_files_with_1_string(directory_path, string_to_find, columns_to_extract)
+#View(ty2_df)
+#str(ty2_df)
+```
+
+# Typing test extract - 3
+```{r}
+string_to_find <- ty_task3 # Specify the string to find in file names
+columns_to_extract <- ty_cols  # Specify list of columns to extract
+# Call the function
+ty3_df <- extract_columns_from_files_with_1_string(directory_path, string_to_find, columns_to_extract)
+#View(ty3_df)
+#str(ty3_df)
+```
+
+
+# Remote Associates Test Extract
+```{r}
+string_to_find <- rat_task # Specify the string to find in file names
+columns_to_extract <- rat_cols  # Specify list of columns to extract
+# Call the function
+rat_df <- extract_columns_from_files_with_1_string(directory_path, string_to_find, columns_to_extract)
+#View(rat_df)
+#str(rat_df)
+```
+
+# ID Linking information for cross-platform merging
+# ID 1
+```{r}
+string_to_find <- id_task1 # Specify the string to find in file names
+columns_to_extract <- id_cols  # Specify list of columns to extract
+# Call the function
+id1_df <- extract_columns_from_files_with_1_string(directory_path, string_to_find, columns_to_extract)
+#View(id1_df)
+#str(id1_df)
+```
+
+# ID 2
+```{r}
+string_to_find <- id_task2 # Specify the string to find in file names
+columns_to_extract <- id_cols  # Specify list of columns to extract
+# Call the function
+id2_df <- extract_columns_from_files_with_1_string(directory_path, string_to_find, columns_to_extract)
+#View(id2_df)
+#str(id2_df)
+```
+
+# ID 3
+```{r}
+string_to_find <- id_task3 # Specify the string to find in file names
+columns_to_extract <- id_cols  # Specify list of columns to extract
+# Call the function
+id3_df <- extract_columns_from_files_with_1_string(directory_path, string_to_find, columns_to_extract)
+#View(id3_df)
+#str(id3_df)
+```
+
+# Flanker data extract
+```{r}
+string_to_find <- fl_task # Specify the string to find in file names
+columns_to_extract <- fl_cols  # Specify list of columns to extract
+# Call the function
+fl_df <- extract_columns_from_files_with_1_string(directory_path, string_to_find, columns_to_extract)
+#View(fl_df)
+#str(fl_df)
+```
+
+# CPT Extract 1
+```{r}
+string_to_find <- cpt_task1 # Specify the string to find in file names
+columns_to_extract <- cpt_cols  # Specify list of columns to extract
+# Call the function
+cpt1_df <- extract_columns_from_files_with_1_string(directory_path, string_to_find, columns_to_extract)
+#View(cpt1_df)
+#str(cpt1_df)
+```
+
+# CPT Extract 2
+```{r}
+string_to_find <- cpt_task2 # Specify the string to find in file names
+columns_to_extract <- cpt_cols  # Specify list of columns to extract
+# Call the function
+cpt2_df <- extract_columns_from_files_with_1_string(directory_path, string_to_find, columns_to_extract)
+#View(cpt2_df)
+#str(cpt2_df)
+```
+
+# Digit Span extract
+```{r}
+string_to_find <- ds_task # Specify the string to find in file names
+columns_to_extract <- ds_cols  # Specify list of columns to extract
+# Call the function
+ds_df <- extract_columns_from_files_with_1_string(directory_path, string_to_find, columns_to_extract)
+#View(ds_df)
+#str(ds_df)
+```
+
+# Load Cognitive Data
+```{r}
+vs <- vs_df
+ty <- rbind(ty1_df, ty2_df, ty3_df)
+rat <- rat_df
+id <- rbind(id1_df, id2_df, id3_df)
+fl <- fl_df
+ds <- ds_df
+cpt <- rbind(cpt1_df, cpt2_df)
+
+#View(vs)
+#View(ty)
+#View(rat)
+#View(id)
+#View(fl)
+#View(ds)
+#view(cpt)
+
+#Rename columns to standardize task metrics
+colnames(vs)[2] <- 'gor_id'
+colnames(vs)[3] <- 'task'
+colnames(vs)[4] <- 'ztype'
+colnames(vs)[5] <- 'rt'
+colnames(vs)[6] <- 'corr'
+colnames(vs)[8] <- 'array'
+colnames(vs)[9] <- 'cond'
+
+colnames(ty)[2] <- 'gor_id'
+colnames(ty)[3] <- 'task'
+colnames(ty)[4] <- 'ztype'
+colnames(ty)[5] <- 'rt'
+colnames(ty)[6] <- 'corr'
+
+colnames(rat)[2] <- 'gor_id'
+colnames(rat)[3] <- 'task'
+colnames(rat)[4] <- 'ztype'
+colnames(rat)[5] <- 'rt'
+colnames(rat)[6] <- 'corr'
+colnames(rat)[7] <- 'cond'
+
+colnames(id)[2] <- 'gor_id'
+colnames(id)[3] <- 'prolific_id'
+
+colnames(fl)[2] <- 'gor_id'
+colnames(fl)[3] <- 'task'
+colnames(fl)[4] <- 'ztype'
+colnames(fl)[5] <- 'rt'
+colnames(fl)[6] <- 'corr'
+colnames(fl)[7] <- 'cond'
+
+colnames(ds)[2] <- 'gor_id'
+colnames(ds)[3] <- 'task'
+colnames(ds)[4] <- 'ztype'
+colnames(ds)[5] <- 'rt'
+colnames(ds)[6] <- 'corr'
+
+
+colnames(cpt)[2] <- 'gor_id'
+colnames(cpt)[3] <- 'task'
+colnames(cpt)[4] <- 'tnum'
+colnames(cpt)[5] <- 'stype'
+colnames(cpt)[6] <- 'zname'
+colnames(cpt)[7] <- 'ztype'
+colnames(cpt)[8] <- 'rt'
+colnames(cpt)[9] <- 'resp'
+colnames(cpt)[10] <- 'att'
+colnames(cpt)[11] <- 'to'
+```
+
+# Since all data was loaded in as character data type to prevent errors, need to update data types for numeric variables
+```{r}
+vs$rt <- as.numeric(vs$rt)
+vs$corr <- as.numeric(vs$corr)
+
+ty$rt <- as.numeric(ty$rt)
+ty$corr <- as.numeric(ty$corr)
+
+rat$rt <- as.numeric(rat$rt)
+rat$corr <- as.numeric(rat$corr)
+
+fl$rt <- as.numeric(fl$rt)
+fl$corr <- as.numeric(fl$corr)
+
+ds$rt <- as.numeric(ds$rt)
+ds$corr <- as.numeric(ds$corr)
+
+cpt$tnum <- as.numeric(cpt$tnum)
+cpt$rt <- as.numeric(cpt$rt)
+cpt$att <- as.numeric(cpt$att)
+cpt$to <- as.numeric(cpt$to)
+```
+
+# Intake Form IDs
+```{r}
+# Intake q - need to update any wrong IDs so we can link gorilla with redcap
+
+#update IDs in intake
+id$prolific_id[id$prolific_id == '6297567582d2ed2d88ae0450@email.prolific.co'] <- '6297567582d2ed2d88ae0450'
+id$prolific_id[id$prolific_id == '61097e7150203244f66caf5861097e7150203244f66caf58'] <- '61097e7150203244f66caf58'
+id$prolific_id[id$prolific_id == '63644514902f60174b4b29a1@email.prolific.co'] <- '63644514902f60174b4b29a1'
+id$prolific_id[id$prolific_id == '1/14/2021'] <- '55ae64defdf99b3f864653e7'
+#id$prolific_id[id$prolific_id == '12-16-2021'] <- '' rwrpmmkk
+id$prolific_id[id$prolific_id == '64385d841e0d55be48c9c8e4@email.prolific.co'] <- '64385d841e0d55be48c9c8e4'
+
+id$prolific_id[id$prolific_id == '500'] <- '28'
+id$prolific_id[id$prolific_id == '502'] <- '29'
+id$prolific_id[id$prolific_id == '510'] <- '67'
+id$prolific_id[id$prolific_id == '508'] <- '63'
+id$prolific_id[id$prolific_id == '512'] <- '68'
+id$prolific_id[id$prolific_id == '507'] <- '57'
+id$prolific_id[id$prolific_id == '41'] <- '43'
+
+
+#View(id)
+
+```
+
+# Filtering Trials
+## Type/Read Test - control for motor and reading speed
+```{r}
+#Add total reaction time for all reading trials to get distribution of baseline reading speeds
+type_r <- ty %>% group_by(gor_id) %>% filter(ztype == 'reading') %>% distinct() %>% summarise(read_rt_sum = sum(rt))
+#View(type_r)
+
+#Add total reaction time for all typing trials to get distribution of baseline typing speeds
+type_t <- ty %>% group_by(gor_id) %>% filter(ztype == 'response_text_entry') %>% summarise(type_rt_sum = sum(rt))
+#View(type_t)
+
+type_final <- merge(type_r, type_t, by = 'gor_id', all.x = TRUE)
+#View(type_final)
+```
+
+## Flanker
+```{r}
+# Drop NA values from flanker (corresponds to practice trials)
+fl <- drop_na(fl) %>% filter(ztype == 'response_keyboard')
+#View(fl)
+
+### flanker has incongruent and congruent
+fl_incon <- fl %>%
+  filter(cond == "Incongruent") %>%
+  group_by(gor_id) %>%
+  summarise(f_i_rt_mn = mean(as.numeric(rt)),
+            f_i_rt_sd = sd(as.numeric(rt)),
+            f_i_acc = mean(as.numeric(corr)))
+#View(fl_incon)
+
+fl_con <- fl %>%
+  filter(cond == "Congruent") %>%
+  group_by(gor_id) %>%
+  summarise(f_c_rt_mn = mean(as.numeric(rt)),
+            f_c_rt_sd = sd(as.numeric(rt)),
+            f_c_acc = mean(as.numeric(corr)))
+#View(fl_con)
+
+## recombine flanker
+fl_list <- list(fl_con, fl_incon)
+
+#merge all data frames together
+fl_final <- Reduce(function(x, y) merge(x, y, all=TRUE), fl_list)
+#View(fl_final)
+```
+
+## Visual Search
+```{r}
+# Update visual search stimuli to corresponding array image size
+vs <- vs %>% filter(display == 'Trials' & ztype == 'response_keyboard')
+vs$array[vs$array == '3Image8.jpg'] <- 'small'
+vs$array[vs$array == '2Image15.jpg'] <- 'large'
+vs$array[vs$array == '4ImageNoTarget.jpg'] <- 'large'
+vs$array[vs$array == '4Image8.jpg'] <- 'small'
+vs$array[vs$array == '3Image15.jpg'] <- 'large'
+vs$array[vs$array == '1Image8.jpg'] <- 'small'
+vs$array[vs$array == '1Image15.jpg'] <- 'large'
+vs$array[vs$array == '2ImageNT.jpg'] <- 'small'
+#View(vs)
+
+#visual search has present and absent, as well as large and small arrays
+vs_absent_sm <- vs %>%
+  filter(cond == "Absent" & array == 'small') %>%
+  group_by(gor_id) %>%
+  summarise(vs_a_rt_mn_s = mean(as.numeric(rt)),
+            vs_a_rt_sd_s = sd(as.numeric(rt)),
+            vs_a_acc_s = mean(as.numeric(corr)))
+#View(vs_absent_sm)
+
+
+vs_present_sm <- vs %>%
+  filter(cond == "Present" & array == 'small') %>%
+  group_by(gor_id) %>%
+  summarise(vs_p_rt_mn_s = mean(as.numeric(rt)),
+            vs_p_rt_sd_s = sd(as.numeric(rt)),
+            vs_p_acc_s = mean(as.numeric(corr)))
+#View(vs_present_sm)
+
+
+vs_absent_lg <- vs %>%
+  filter(cond == "Absent" & array == 'large') %>%
+  group_by(gor_id) %>%
+  summarise(vs_a_rt_mn_l = mean(as.numeric(rt)),
+            vs_a_rt_sd_l = sd(as.numeric(rt)),
+            vs_a_acc_l = mean(as.numeric(corr)))
+#View(vs_absent_lg)
+
+
+vs_present_lg <- vs %>%
+  filter(cond == "Present" & array == 'large') %>%
+  group_by(gor_id) %>%
+  summarise(vs_p_rt_mn_l = mean(as.numeric(rt)),
+            vs_p_rt_sd_l = sd(as.numeric(rt)),
+            vs_p_acc_l = mean(as.numeric(corr)))
+#View(vs_present_lg)
+
+## recombine visual search
+vs_list <- list(vs_absent_sm, vs_present_sm, vs_absent_lg, vs_present_lg)
+
+#merge all data frames together
+vs_final <- Reduce(function(x, y) merge(x, y, all=TRUE), vs_list)
+#View(vs_final)
+```
+
+## Remote Associates Test
+```{R}
+rat_easy <- rat %>%
+  filter(cond == "easy") %>%
+  group_by(gor_id) %>%
+  summarise(rat_e_rt_mn = mean(as.numeric(rt)),
+            rat_e_rt_sd = sd(as.numeric(rt)),
+            rat_e_acc = mean(as.numeric(corr)))
+#View(rat_easy)
+
+rat_med <- rat %>%
+  filter(cond == "medium") %>%
+  group_by(gor_id) %>%
+  summarise(rat_m_rt_mn = mean(as.numeric(rt)),
+            rat_m_rt_sd = sd(as.numeric(rt)),
+            rat_m_acc = mean(as.numeric(corr)))
+#View(rat_med)
+
+rat_hard <- rat %>%
+  filter(cond == "hard") %>%
+  group_by(gor_id) %>%
+  summarise(rat_h_rt_mn = mean(as.numeric(rt)),
+            rat_h_rt_sd = sd(as.numeric(rt)),
+            rat_h_acc = mean(as.numeric(corr)))
+#View(rat_hard)
+
+#create list of rat metrics
+rat_list <- list(rat_easy, rat_med, rat_hard)
+
+#merge all data frames together
+rat_final <- Reduce(function(x, y) merge(x, y, all=TRUE), rat_list)
+#View(rat_final)
+```
+
+## Digit Span Forward
+```{r}
+#digit span
+#View(ds)
+ds <- ds %>% filter(ztype == 'response_text_entry') %>% as.data.table()
+
+# ds metrics
+ds_metrics <- ds[, .(ds_acc = (sum(as.numeric(corr == 1))/10), ds_rt_mn = mean(as.numeric(rt)), ds_rt_sd = sd(as.numeric(rt))), 
+                 keyby = .(gor_id)]
+#View(ds_metrics)
+kable(head(ds_metrics))
+```
+
+## Continous Performance Test Scoring
+```{r}
+#assign blocks to trial numbers
+#View(cpt)
+cpt$tnum2 <- cpt$tnum
+cpt$tnum2 <- as.numeric(cpt$tnum2)
+cpt$tnum_b1 <- if_else((cpt$tnum2 >= 19 & cpt$tnum2 < 56), 1, 0)
+cpt$tnum_b2 <- if_else((cpt$tnum2 >= 56 & cpt$tnum2 < 93), 2, 0)
+cpt$tnum_b3 <- if_else((cpt$tnum2 >= 93 & cpt$tnum2 < 130), 3, 0)
+cpt$tnum_b4 <- if_else((cpt$tnum2 >= 130 & cpt$tnum2 < 167), 4, 0)
+cpt$tnum_b5 <- if_else((cpt$tnum2 >= 167 & cpt$tnum2 < 204), 5, 0)
+cpt$tnum_b6 <- if_else((cpt$tnum2 >= 204 & cpt$tnum2 < 244), 6, 0)
+
+cpt$tnum_block <- cpt$tnum_b1+cpt$tnum_b2+cpt$tnum_b3+cpt$tnum_b4+cpt$tnum_b5+cpt$tnum_b6
+
+#filter cpt data by ID and real trials
+cpt2 <- cpt %>% filter(type == 'task') %>% group_by(gor_id)
+
+#add log transformed reaction times
+cpt2$rt_log <- log(as.numeric(cpt2$rt))
+
+# ATTEMPT DATA
+#Total correct and incorrect - attempt data
+#View(cpt3)
+
+cpt3 <- cpt2 %>% as.data.table() %>% filter(att == 1 & rt > 0)
+cpt3$resp[cpt3$resp == 'correct'] <- 1
+cpt3$resp[cpt3$resp == 'incorrect'] <- -1
+cpt3$resp <- as.numeric(cpt3$resp)
+
+# ERROR METRICS - targets and nontargets
+error_metrics <- cpt3[, .(co = sum(resp == -1, na.rm = T)/25, om = (200-(sum(resp == 1, na.rm = T)))/200,
+                        t = sum(resp == 1, na.rm = T), attp = sum(att, na.rm = T),
+                        t_r = sum(resp == 1, na.rm = T)/200,
+                        d = (sum(resp == -1, na.rm = T)/sum(resp == 1, na.rm = T))), 
+                    keyby = .(gor_id)]
+kable(head(error_metrics))
+```
+
+```{r}
+# Filter table for target data
+cpt4 <- cpt2 %>% as.data.table() %>% filter(att == 1 & number != 3)
+ 
+# REACTION TIME DATA 
+rt_metrics <- cpt4[, .(hrt_m = mean(rt, na.rm = T), hrt_ml = mean(rt_log, na.rm = T), hrt_s = sd(rt, na.rm = T), hrt_sl = sd(rt_log, na.rm = T), hrt_v = (max(rt, na.rm = T)-min(rt, na.rm = T)), hrt_vl = (max(rt_log, na.rm = T)-min(rt_log, na.rm = T))),
+                   keyby = .(gor_id)]
+kable(head(rt_metrics))
+```
+
+```{r}
+# SUSTAINED ATTENTION REACTION TIME
+sus_b1 <- cpt2 %>% filter(tnum_block == 1 & att == 1 & number != 3) %>% summarise(b1_rt = mean(rt))
+
+sus_b6 <- cpt2 %>% filter(tnum_block == 6 & att == 1 & number != 3) %>% summarise(b6_rt = mean(rt))
+
+sus_metrics <- merge(sus_b1, sus_b6, by = 'gor_id', all = TRUE)
+
+sus_metrics$b1_rt[is.na(sus_metrics$b1_rt)] <- median(sus_metrics$b1_rt, na.rm = T)
+sus_metrics$b6_rt[is.na(sus_metrics$b6_rt)] <- median(sus_metrics$b6_rt, na.rm = T)
+
+#Want a positive or zero value. Negative means that attention was not sustained.
+sus_metrics$b_diff <- sus_metrics$b1_rt-sus_metrics$b6_rt
+kable(head(sus_metrics))
+hist(sus_metrics$b_diff)
+```
+```{r}
+# SUSTAINED ATTENTION COMMISIONS
+sus_b1_co <- cpt2 %>% filter(tnum_block == 1 & att == 1)
+sus_b1_co$resp[sus_b1_co$resp == 'correct'] <- 1
+sus_b1_co$resp[sus_b1_co$resp == 'incorrect'] <- -1
+sus_b1_co$resp <- as.numeric(sus_b1_co$resp)
+b1_co <-sus_b1_co %>% summarise(b1co = sum(resp == -1, na.rm = T))
+
+
+sus_b6_co <- cpt2 %>% filter(tnum_block == 6 & att == 1) 
+sus_b6_co$resp[sus_b6_co$resp == 'correct'] <- 1
+sus_b6_co$resp[sus_b6_co$resp == 'incorrect'] <- -1
+sus_b6_co$resp <- as.numeric(sus_b6_co$resp)
+b6_co <-sus_b6_co %>% summarise(b6co = sum(resp == -1, na.rm = T))
+
+co_metrics <- merge(b1_co, b6_co, by = 'gor_id', all = TRUE)
+
+co_metrics$b1co[is.na(co_metrics$b1co)] <- median(co_metrics$b1co, na.rm = T)
+co_metrics$b6co[is.na(co_metrics$b6co)] <- median(co_metrics$b6co, na.rm = T)
+
+#Want a positive or zero value. Negative means that attention was not sustained.
+co_metrics$co_diff <- co_metrics$b1co-co_metrics$b6co
+kable(head(co_metrics))
+hist(co_metrics$co_diff)
+```
+
+```{r}
+# SUSTAINED ATTENTION OMISIONS
+sus_b1_om <- cpt2 %>% filter(tnum_block == 1 & att == 1)
+sus_b1_om$resp[sus_b1_om$resp == 'correct'] <- 1
+sus_b1_om$resp[sus_b1_om$resp == 'incorrect'] <- -1
+sus_b1_om$resp <- as.numeric(sus_b1_om$resp)
+b1_om <-sus_b1_om %>% summarise(b1om = (33-(sum(resp == 1, na.rm = T))))
+
+sus_b6_om <- cpt2 %>% filter(tnum_block == 6 & att == 1) 
+sus_b6_om$resp[sus_b6_om$resp == 'correct'] <- 1
+sus_b6_om$resp[sus_b6_om$resp == 'incorrect'] <- -1
+sus_b6_om$resp <- as.numeric(sus_b6_om$resp)
+b6_om <-sus_b6_om %>% summarise(b6om = (38-(sum(resp == 1, na.rm = T))))
+
+om_metrics <- merge(b1_om, b6_om, by = 'gor_id', all = TRUE)
+
+om_metrics$b1om[is.na(om_metrics$b1om)] <- median(om_metrics$b1om, na.rm = T)
+om_metrics$b6om[is.na(om_metrics$b6om)] <- median(om_metrics$b6om, na.rm = T)
+
+#Want a positive or zero value. Negative means that attention was not sustained.
+om_metrics$om_diff <- om_metrics$b1om-om_metrics$b6om
+kable(head(om_metrics))
+#hist(om_metrics$om_diff)
+```
+
+```{r}
+# PERSEVERATIONS
+cpt2$att <- as.numeric(cpt2$att)
+cpt5 <- cpt2 %>% as.data.table()
+per_metrics <- cpt5[, .(per_sum = sum(att > 1, na.rm = T), per_nt = sum(att > 1 & resp == 'incorrect', na.rm = T), 
+                        per_t = sum(att > 1 & resp == 'correct', na.rm=T), per_max = max(att, na.rm=T)),
+                   keyby = .(gor_id)]
+kable(head(per_metrics))
+
+```
+```{r}
+#Combine all CPT metrics
+cpt_list <- list(error_metrics, rt_metrics, sus_metrics, per_metrics, om_metrics, co_metrics)      
+
+#merge all data frames together
+cpt_final <- Reduce(function(x, y) merge(x, y, all=TRUE), cpt_list)
+#cpt_final
+
+```
+
+# Combining Final Clean Task Data by Participant ID
+```{r}
+# Combine all tasks into one dataframe
+cog_list <- list(vs_final, fl_final, ds_metrics, type_final, cpt_final, rat_final)
+
+#merge all data frames together
+cog_final <- Reduce(function(x, y) merge(x, y, all=TRUE), cog_list)
+#cog_final
+
+#match prolific ID with gorilla ID for redcap merging
+id_match <- merge(cog_final, id[ , c(2,3)], by = 'gor_id', all.x = TRUE)
+
+gor_final <- id_match %>% relocate(prolific_id, .after = gor_id)
+#gor_final
+
+#View(gor_final)
+```
+
+# Assessing Gorilla Data Quality - bots and low performance
+```{r}
+#clustering for RT outliers
+
+
+#CPT sustained attention performance
+
+
+#Clustering for accuracies
+
+```
+
+# Load Redcap Data
+```{r}
+setwd("~/Post COVID Study")
+rc1 <- read_csv('rc_c1.csv')
+rc3 <- read_csv('rc_c3.csv')
+rc4 <- read_csv('rc_c4.csv')
+
+#Verify mathching datatypes
+#str(rc1)
+#str(rc3)
+#str(rc4)
+
+#update community vets column to match prolifics
+rc4$prolific_id <- rc4$participant_id
+rc4$participant_type <- 1
+rc4$pc_diag_time <- ""
+
+#Update datatypes
+rc1$height <- as.numeric(rc1$height)
+rc4$participant_id <- as.numeric(rc4$participant_id)
+rc4$intro_date <- as.Date(rc4$intro_date, format = '%m/%d/%Y')
+rc4$covid_test_date <- as.Date(rc4$covid_test_date, format = '%m/%d/%Y')
+rc4$covid_start <- as.Date(rc4$covid_start, format = '%m/%d/%Y')
+rc4$vaccine_first_dose <- as.Date(rc4$vaccine_first_dose, format = '%m/%d/%Y')
+rc4$vaccine_second_dose <- as.Date(rc4$vaccine_second_dose, format = '%m/%d/%Y')
+rc4$tbi_date <- as.Date(rc4$tbi_date, format = '%m/%d/%Y')
+rc4$introduction_timestamp <- as.Date(rc4$introduction_timestamp, format = '%m/%d/%Y')
+
+
+#merge all redcap files with cohort 1
+rc_prep <- full_join(rc1, rc3[ , c(colnames(rc1))])
+rc <- full_join(rc_prep, rc4[ , c(colnames(rc1))])
+
+#View(rc)
+
+#Check dimensions of data
+dim(rc) #902 rows x. 172 columns
+#summary(rc)
+```
+
+# Impute NAs as zeroes for sparse PCS symptom data
+```{r}
+rc$fever_2[is.na(rc$fever_2)] <- 0
+rc$chills_2[is.na(rc$chills_2)] <- 0
+rc$headache_2[is.na(rc$headache_2)] <- 0
+rc$appetite_2[is.na(rc$appetite_2)] <- 0
+rc$nose_2[is.na(rc$nose_2)] <- 0
+rc$throat_2[is.na(rc$throat_2)] <- 0
+rc$fatigue_2[is.na(rc$fatigue_2)] <- 0
+rc$brainfog_2[is.na(rc$brainfog_2)] <- 0
+rc$unrefresh_2[is.na(rc$unrefresh_2)] <- 0
+rc$diffsleep_2[is.na(rc$diffsleep_2)] <- 0
+rc$daysleep_2[is.na(rc$daysleep_2)] <- 0
+rc$actfatigue_2[is.na(rc$actfatigue_2)] <- 0
+rc$smell_2[is.na(rc$smell_2)] <- 0
+rc$taste_2[is.na(rc$taste_2)] <- 0
+rc$ear_2[is.na(rc$ear_2)] <- 0
+rc$anxiety_2[is.na(rc$anxiety_2)] <- 0
+rc$depression_2[is.na(rc$depression_2)] <- 0
+rc$paranoid_2[is.na(rc$paranoid_2)] <- 0
+rc$hallucinations_2[is.na(rc$hallucinations_2)] <- 0
+rc$cough_2[is.na(rc$cough_2)] <- 0
+rc$chest_2[is.na(rc$chest_2)] <- 0
+rc$breathrest_2[is.na(rc$breathrest_2)] <- 0
+rc$breathwalk_2[is.na(rc$breathwalk_2)] <- 0
+rc$wheezing_2[is.na(rc$wheezing_2)] <- 0
+rc$lighthead_2[is.na(rc$lighthead_2)] <- 0
+rc$faint_2[is.na(rc$faint_2 )] <- 0
+rc$sweat_2[is.na(rc$sweat_2)] <- 0
+rc$gastro_2[is.na(rc$gastro_2)] <- 0
+rc$color_2[is.na(rc$color_2)] <- 0
+rc$urinary_2[is.na(rc$urinary_2)] <- 0
+rc$chills_2[is.na(rc$chills_2)] <- 0
+```
+
+
+## Incorrect Values
+### Fix incorrect ID numbers
+```{r}
+rc$prolific_id[rc$prolific_id == '5ec2cf881ee4a70eb0eae3fc@email.prolific.co'] <- '5ec2cf881ee4a70eb0eae3fc'
+rc$prolific_id[rc$prolific_id == '64385d841e0d55be48c9c8e4@email.prolific.co'] <- "64385d841e0d55be48c9c8e4"
+#View(rc)
+```
+
+### Fix incorrect height and weight values
+```{r}
+rc$height[rc$height == '5.0'] <- 60
+rc$height[rc$height == '5'] <- 60
+rc$height[rc$height == '5.6'] <- 66
+rc$height[rc$height == '5.9'] <- 69
+rc$height[rc$height == '6.0'] <- 72
+rc$height[rc$height == '6'] <- 72
+rc$height[rc$height == '127'] <- 50
+rc$height[rc$height == '160'] <- 63
+rc$height[rc$height == '170'] <- 67
+rc$height[rc$height == '184'] <- 72
+rc$height[rc$height == "4'11"] <- 59
+rc$height[rc$height == "5'10"] <- 70
+rc$height[rc$height == "5'3"] <- 63
+rc$height[rc$height == "5'5"] <- 65
+rc$height[rc$height == "60 inches"] <- 60
+rc$height[rc$height == 722.0] <- 72
+rc$height <- as.numeric(rc$height)
+
+rc$weight[rc$weight == 2009] <- 209
+rc$weight[rc$weight < 70] <- median(rc$weight)
+
+#Recalc BMI
+rc$BMI <- round(((rc$weight/(rc$height^2))*703), 1)
+```
+
+### Abnormal COVID start dates - Look at other date values/data to determine valid replacement for typos
+```{r}
+#Drop people with no covid start date
+#Check for missing dates and abnormal dates
+summary(rc$covid_start)
+summary(rc$covid_test_date)
+
+#Filter out people without covid infection frequencies
+rc <- rc %>% filter(!is.na(infection_frequency))
+
+#update outlier infection frequencies to 4
+rc$infection_frequency[rc$infection_frequency == 99 & rc$prolific_id == "60dfdb8bbef17b6739d12215"] <- 4
+rc$infection_frequency[rc$infection_frequency == 99 & rc$prolific_id == "5849061d0c097700012a1ed4"] <- 7
+rc$infection_frequency[rc$infection_frequency == 99 & rc$prolific_id == "604b852fec0f0907cdd2a22b"] <- 4
+rc$infection_frequency[rc$infection_frequency == 99 & rc$prolific_id == "64"] <- 4
+
+#correct 4 missing COVID start dates with available date data
+#View(rc)
+#dim(rc)
+
+#Recheck NA values
+#summary(rc$covid_start)
+#summary(rc$covid_test_date)
+
+#Inspect dates that are prior to pandemic March 11, 2020
+dim(rc%>%filter(covid_start < '2020-03-01')) # 16 people report COVID start date before pandemic
+rc%>%filter(covid_start < '2020-03-01')%>% summarise(prolific_id, covid_start, covid_test_date, covid_duration, covid_proof_upload)
+
+# 5eb29a3db97d6b0008d24a1a - update start date to 2021-01-13 (had 2015)
+# 5bd4cb4f25db7b000179488d - update start date to 2019 (had 2018)
+rc$covid_start[rc$covid_start == '2015-01-13'] <- '2021-01-13'
+rc$covid_start[rc$covid_start == '2018-02-14'] <- '2019-02-04'
+
+#Inspect dates that are reported in the future
+rc%>%filter(covid_start > '2023-11-01')%>% summarise(prolific_id, covid_start, covid_test_date, covid_duration, covid_proof_upload)
+
+# ID 643f45fb95bd0d596b4459a1 reported start date december 2023 - update to 2022
+rc$covid_start[rc$covid_start == '2023-12-08'] <- '2022-12-08'
+# ID 6073ad2cd288215f64f51efa  reported start date december 2023 - update to 2022
+rc$covid_start[rc$covid_start == '2023-12-28'] <- '2022-12-28'
+# ID 62f406ea9d51a0dd13658afd reported 2023 - update to 2022
+rc$covid_start[rc$covid_start == '2023-12-09'] <- '2022-12-09'
+# ID 5e574f393e26c90f2b47b96c reported 2023 - update to 2021
+rc$covid_start[rc$covid_start == '2023-11-13'] <- '2021-11-13'
+# ID 61531c83fe2060f8baac5441 reported 2023 - update to 2020
+rc$covid_start[rc$covid_start == '2023-12-23'] <- '2020-12-23'
+# ID 5fcfbe51f4b7b212b3eb3eb8 reported 2023 - updated to 2020
+rc$covid_start[rc$covid_start == '2023-11-20'] <- '2020-11-20'
+# ID 6109cd6a03dc4d54ad56fa75 reported 2023 - update to 2021
+rc$covid_start[rc$covid_start == '2023-11-05'] <- '2021-11-05'
+# ID 60b8555a8b8253295be46dc6 reported 2023 - update to 2019
+rc$covid_start[rc$covid_start == '2023-12-07'] <- '2019-12-07'
+
+#Abnormal vaccine dates
+summary(rc$vaccine_first_dose)
+summary(rc$vaccine_second_dose)
+
+#Check vaccine date before pandemic
+rc%>%filter(vaccine_first_dose < '2020-01-01')%>% summarise(prolific_id, vaccine_first_dose, vaccine_second_dose)
+
+# ID 568e7e33e3ef9e000da202a7 reported year 2000
+rc$vaccine_first_dose[rc$vaccine_first_dose == '2000-03-10'] <- '2020-03-10'
+# ID 64 reported tear 2019 - updated to 2020
+rc$vaccine_first_dose[rc$vaccine_first_dose == '2019-12-10'] <- '2020-12-10'
+
+#Check vaccine dates in future - there are none
+rc%>%filter(vaccine_first_dose > '2023-11-01')%>% summarise(prolific_id, vaccine_first_dose, vaccine_second_dose)
+```
+
+
+# Score PSQI
+```{r}
+setwd("~/Post COVID Study")
+psqi <- read_csv("psqi_data.csv")
+#View(psqi_add)
+
+psqi2 <- read_csv("psqi_data_2.csv")
+#View(psqi2)
+
+# Add a few new lines of data
+psqi_add <- rbind(psqi, psqi2)
+
+
+#Extract ID and global psqi scores to add to master dataframe
+psqi_metrics <- psqi_add[ , c(1,30)]
+
+#Update score names to R-friendly variable name
+colnames(psqi_metrics)[2] <- 'psqi_glob'
+
+#update ID errors
+psqi_metrics$prolific_id[psqi_metrics$prolific_id == "64385d841e0d55be48c9c8e4@email.prolific.co"] <- "64385d841e0d55be48c9c8e4"
+
+#Update error calculated values to NA
+psqi_metrics$psqi_glob[psqi_metrics$psqi_glob == "#VALUE!"] <- ""
+psqi_metrics$psqi_glob <- as.numeric(psqi_metrics$psqi_glob)
+
+#View(psqi_metrics)
+```
+
+# Combine PSQI data with other self-report data, and then drop People without full redcap data
+```{r}
+rc <- merge(rc, psqi_metrics, by = 'prolific_id', all.x = TRUE)
+#View(rc)
+
+#Filter out people with missing data
+rc <- rc %>% filter(!is.na(vdaq_score))
+```
+
+# Feature Engineering Pre-EDA
+
+## PCS Diagnosis
+```{r}
+# PCS Diagnosis time frame
+#View(rc)
+rc$datediff <- abs(round(difftime(rc$intro_date, rc$covid_start, units = 'weeks'),1))
+rc$datediff <- gsub(' weeks', '', rc$datediff)
+rc$datediff <- as.numeric(rc$datediff)
+rc$dd_bin <- cut(rc$datediff, breaks=c(0, 4, 12, 300), labels = c('Acute','Ongoing','PCS'))
+
+rc$persistent_symptom_amount[is.na(rc$persistent_symptom_amount)] <- 0
+rc$pcfs_subjective_scale[is.na(rc$pcfs_subjective_scale)] <- 0 
+
+#str(rc$pcfs_subjective_scale)
+#summary(rc$dd_bin)
+
+# PCS Diagnosis = Longer than 12 weeks since testing positive, 1 or more persistent symptoms, report affect on daily functioning
+rc$pcs_diag <- if_else((rc$dd_bin == 'PCS' & rc$persistent_symptom_amount >= 1 & rc$pcfs_subjective_scale != '1'), 1, 0)
+
+#verify proportions of folks with PCS
+table(rc$pcs_diag) # 533, 298
+prop.table(table(rc$pcs_diag))  # 64.1 % , 35.9 %
+
+# Manually inspect people with missing PCS diagnosis
+na_pcs <- rc %>% filter(is.na(pcs_diag)) %>% select(prolific_id, intro_date, covid_start, datediff, dd_bin,
+                                                           persistent_symptom_amount, pcfs_subjective_scale)
+na_pcs
+
+# ID 64 manual check for diagnosis criteria
+#rc$datediff <- ifelse(rc$prolific_id == 64, difftime(rc$intro_date, rc$covid_test_date, units = "weeks"), rc$datediff)  # Weeks between study and covid infection based on testing date
+
+#rc$dd_bin <- ifelse(rc$prolific_id == 64 & rc$datediff >= 12, "PCS", rc$dd_bin) # Update dd_bin variable to "pcs"
+
+#rc$pcs_diag <- ifelse((rc$prolific_id == 64 & rc$dd_bin == 'PCS' & rc$persistent_symptom_amount >= 1 & rc$pcfs_subjective_scale != '1'), 1, rc$pcs_diag) # Update pcs_diag
+
+#data vis for PCS proportion
+ggplot(data = rc, aes(x = as.factor(pcs_diag), fill = as.factor(pcs_diag))) + 
+  geom_bar(show.legend = F) +
+  theme_minimal() + 
+  labs(title = 'PASC Diagnosis Proportion', x = 'Diagnosis Status', y = 'Frequency')
+
+```
+
+
+## COVID Infection Verification
+```{r}
+# From participant uploads
+rc$verify <- if_else(is.na(rc$covid_proof_upload), 0, 1)
+table(rc$verify)
+
+# For Veterans, verify in medical records
+
+```
+
+## Number of Days with Active COVID Symptoms (all infections)
+```{r}
+rc$covid_duration[is.na(rc$covid_duration)] <- 0
+rc$covid_duration_2[is.na(rc$covid_duration_2)] <- 0
+rc$covid_duration_3[is.na(rc$covid_duration_3)] <- 0
+rc$duration <- rc$covid_duration + rc$covid_duration_2 + rc$covid_duration_3
+```
+
+
+## Vaccine Before/After Inital Infection (binary)
+```{r}
+rc$vacc_inf_diff <- difftime(rc$vaccine_first_dose, rc$covid_start, units = 'days')
+
+rc$vacc_inf_diff <- as.numeric(rc$vacc_inf_diff)
+
+#positive values = vaccine came after initial infection
+#negative values = vaccine came before initial infection
+#rc$vacc_inf_diff
+hist(as.numeric(rc$vacc_inf_diff))
+```
+
+## Unemployment Length and COVID Unemployment
+```{r}
+rc$unemployment_length[is.na(rc$unemployment_length)] <- 0
+rc$unemployment_covid[is.na(rc$unemployment_covid)] <- 2 # 2 is people who are working
+rc$unemployment_covid <- as.factor(rc$unemployment_covid)
+```
+
+## TBI Diagnoses - VA DOD Guidelines for mild/moderate/severe
+```{r}
+# 92 mild, 8 moderate, 2 severe, 710 undiagnosed
+table(rc$tbi_status)
+
+#label definite diagnoses
+rc$tbi_diag <- if_else(rc$tbi_status == 98, 0, 1)
+table(rc$tbi_diag)  # 12.6% verified diagnoses
+```
+
+```{r}
+#label no diagnosis
+#rc$tbi_no <- if_else((rc$tbi_status == 98 & rc$tbi_ams == 0 & rc$tbi_loc == 98 & rc$tbi_pta == 98), '0', "")
+#table(rc$tbi_no)
+
+#label mild diagnosis
+rc$tbi_mild <- if_else((rc$tbi_status == 98 & rc$tbi_ams == 1 & rc$tbi_loc == 98 & rc$tbi_pta == 98), 1, 0)
+
+#relabel with mild, moderate, severe labels for LOC, PTA, AMS
+rc$tbi_loc[rc$tbi_loc == 1] <- 'Mild'
+rc$tbi_loc[rc$tbi_loc == 2] <- 'Mod'
+rc$tbi_loc[rc$tbi_loc == 3] <- 'Sev'
+rc$tbi_pta[rc$tbi_pta == 1] <- 'Mild'
+rc$tbi_pta[rc$tbi_pta == 2] <- 'Mild'
+rc$tbi_pta[rc$tbi_pta == 3] <- 'Mod'
+rc$tbi_pta[rc$tbi_pta == 4] <- 'Sev'
+
+#create combination variable
+rc$tbi_profile <- paste(rc$tbi_loc, rc$tbi_pta)
+#table(rc$tbi_profile)
+
+#Relabel probable diagnosis level based on which symptom was worse (LOC or PTA)
+rc$tbi_mild2 <- if_else(rc$tbi_profile == '98 Mild', 1, 0)
+rc$tbi_mild3 <- if_else(rc$tbi_profile == 'Mild 98', 1, 0)
+rc$tbi_mild4 <- if_else(rc$tbi_profile == 'Mild Mild', 1, 0)
+
+rc$tbi_mod <- if_else(rc$tbi_profile == '98 Mod', 2, 0)
+rc$tbi_mod2 <- if_else(rc$tbi_profile == 'Mild Mod', 2, 0)
+rc$tbi_mod3 <- if_else(rc$tbi_profile == 'Mod 98' , 2, 0)
+rc$tbi_mod4 <- if_else(rc$tbi_profile == 'Mod Mild', 2, 0)
+rc$tbi_mod5 <- if_else(rc$tbi_profile == 'Mod Mod', 2, 0)
+
+rc$tbi_sev <- if_else(rc$tbi_profile == '98 Sev', 3, 0)
+rc$tbi_sev2 <- if_else(rc$tbi_profile == 'Mild Sev', 3, 0)
+rc$tbi_sev3 <- if_else(rc$tbi_profile == 'Mod Sev', 3, 0)
+rc$tbi_sev4 <- if_else(rc$tbi_profile == 'Sev Mild', 3, 0)
+rc$tbi_sev5 <- if_else(rc$tbi_profile == 'Sev Mod', 3, 0)
+
+rc$tbi_prob <- rc$tbi_mild + rc$tbi_mild2 + rc$tbi_mild3 + rc$tbi_mild4 + 
+                   rc$tbi_mod + rc$tbi_mod2 + rc$tbi_mod3 + rc$tbi_mod4 + rc$tbi_mod5 + 
+                   rc$tbi_sev + rc$tbi_sev2 + rc$tbi_sev3 + rc$tbi_sev4 + rc$tbi_sev5
+
+table(rc$tbi_prob)
+
+rc$tbi_prob[is.na(rc$tbi_prob)] <- 0
+```
+
+# TBI inspect
+```{r}
+#tbi_test <- rc %>% summarize(tbi_diag, tbi_prob)
+#tbi_test
+```
+
+## Update Education to Years
+```{r}
+table(rc$edu_degree)
+rc$edu_degree <- as.numeric(rc$edu_degree)
+rc$edu_degree[rc$edu_degree == 98] <- 10
+rc$edu_degree[rc$edu_degree == 99] <- 14
+rc$edu_degree[rc$edu_degree == 1] <- 12
+rc$edu_degree[rc$edu_degree == 2] <- 14
+rc$edu_degree[rc$edu_degree == 3] <- 16
+rc$edu_degree[rc$edu_degree == 4] <- 18
+rc$edu_degree[rc$edu_degree == 5] <- 24
+
+```
+
+## Categorize Major Health Condition Categories
+```{r}
+rc$neuro___98[rc$neuro___98 == 1] <- 0
+rc$cardio___98[rc$cardio___98 == 1] <- 0
+rc$metabolic___98[rc$metabolic___98 == 1] <- 0
+rc$mentalhealth___98[rc$mentalhealth___98 == 1] <- 0
+rc$autoimmune___98[rc$autoimmune___98 == 1] <- 0
+
+#Number of each type of major health condition
+rc$neuro <- rc$neuro___1+rc$neuro___2+rc$neuro___3+rc$neuro___4+rc$neuro___5+rc$neuro___6+ 
+  rc$neuro___7+rc$neuro___8+rc$neuro___99
+rc$cardio <- rc$cardio___1+rc$cardio___2+rc$cardio___3+rc$cardio___4+rc$cardio___5+
+  rc$cardio___6+rc$cardio___7+rc$cardio___8+rc$cardio___9+rc$cardio___10+rc$cardio___99
+rc$metabo <- rc$metabolic___1+rc$metabolic___2+rc$metabolic___3+rc$metabolic___4+rc$metabolic___5+rc$metabolic___99
+rc$mental <- rc$mentalhealth___1+rc$mentalhealth___2+rc$mentalhealth___3+rc$mentalhealth___4+rc$mentalhealth___5+rc$mentalhealth___99
+rc$auto <- rc$autoimmune___1+rc$autoimmune___2+rc$autoimmune___3+rc$autoimmune___4+rc$autoimmune___5+rc$autoimmune___99
+
+```
+
+# Ratio of Household members who contribute to income
+```{r}
+#boxplot(rc$household_1)
+#sort(rc$household_1, decreasing = T)
+rc$household_1[rc$household_1 > 7] <- median(rc$household_1)
+#boxplot(rc$household)
+#sort(rc$household, decreasing = T)
+
+rc$headhouse <- rc$household_1/rc$household
+#summary(rc$headhouse)
+#sort(rc$headhouse, decreasing = T)
+rc$headhouse[rc$headhouse == 2] <- 1
+```
+
+# Income ratio - individual to household
+```{r}
+#rc$income[rc$income == 1] <- 25000
+##rc$income[rc$income == 2] <- 50000
+#rc$income[rc$income == 3] <- 75000
+#rc$income[rc$income == 4] <- 100000
+#rc$income[rc$income == 5] <- 150000
+#rc$income[rc$income == 6] <- 200000
+
+#rc$income_2[rc$income_2 == 1] <- 25000
+#rc$income_2[rc$income_2 == 2] <- 50000
+#rc$income_2[rc$income_2 == 3] <- 75000
+#rc$income_2[rc$income_2 == 4] <- 100000
+#rc$income_2[rc$income_2 == 5] <- 150000
+#rc$income_2[rc$income_2 == 6] <- 200000
+
+#rc$income_2[rc$income_2 == 98] <- rc$income
+
+#rc$income_ratio <- rc$income/(rc$income_2-rc$income)
+#summary(rc$income_ratio)
+#boxplot(rc$income_ratio)
+
+```
+
+# Diagnosis Type
+```{r}
+#table(rc$diagnosis_type, rc$participant_type)
+#Drop people with self-diagnosis
+#Lose 25 civilians and 1 veteran
+#rc <- rc %>% filter(diagnosis_type == 3)
+
+```
+# Combine infection frequency and infection frequency other
+```{r}
+#table(rc$infection_frequency)
+#summary(rc$infection_frequency_other)
+```
+#Combine vaccine status and booster status into one variable
+```{r}
+table(rc$vaccine_status) 
+table(rc$booster_status)
+
+rc$booster_status[is.na(rc$booster_status)] <- 0
+
+rc$vaccboost <- as.numeric(rc$vaccine_status) + as.numeric(rc$booster_status)
+table(rc$vaccboost)
+
+rc$vaccboost[rc$vaccboost == 0] <- 'No'
+rc$vaccboost[rc$vaccboost == 1] <- 'Yes'
+rc$vaccboost[rc$vaccboost == 2] <- 'Boost'
+
+```
+
+# Relationship between financial stress from pandemic vs. finanical stress from covid infection
+```{r}
+#Highly correlated - see which one has greater relationship with outcome variable
+cor.test(rc$financial_stress_1, rc$financial_stress_2)
+
+#pandemic finances
+prop.table(table(rc$pcs_diag, rc$financial_stress_1))
+fin1 <- sum(0.1095, 0.1468, 0.0517, 0.0505)
+fin1
+
+#covid finances
+prop.table(table(rc$pcs_diag, rc$financial_stress_2))
+fin2 <- sum(0.1528, 0.1107, 0.0554, 0.0397)
+fin2
+
+#Add them together to make a scale of 8
+rc$fin_stress <- rc$financial_stress_1+rc$financial_stress_2
+
+```
+# Grade of PCS impact
+```{r}
+cor.test(as.numeric(rc$pcfs_grade_status), as.numeric(rc$subjective_pcs_score))
+
+```
+
+# Initial Symptoms
+```{r}
+cor.test(rc$initial_symptom_amount, rc$initial_symptom_score)
+
+```
+# TBI before or after COVID
+```{r}
+# 11 people report diagnosed head injuries after COVID infection
+tbi_after <- rc %>% filter(tbi_date >= covid_start)
+#tbi_after
+
+# 89 people report diagnosed head injuries before COVID infection
+tbi_before <- rc %>% filter(tbi_date < covid_start)
+#tbi_before
+
+#create "after" scoring
+rc$tbi_after <- if_else(rc$tbi_date >= rc$covid_start, 2, 0)
+
+#create "before" scoring
+rc$tbi_before <- if_else(rc$tbi_date < rc$covid_start, 1, 0)
+
+#create summary score combing after and before into one variable
+rc$tbi_covid <- rc$tbi_after+rc$tbi_before
+
+#assign value of 0 to people who did not report official diagnosis and date
+rc$tbi_covid[is.na(rc$tbi_covid)] <- 0
+
+#Look at proportions of variable
+table(rc$tbi_covid)
+
+```
+
+# Health other
+```{r}
+#code qualitative reporting into major categories
+
+```
+
+# Drop redundant/useless variables
+```{r}
+#str(rc)
+#View(rc)
+
+drop_list <- list(
+'intro_date',
+'nicotine_fx',
+'household',
+'household_1',
+'income_2',
+'employment_status',
+'infection_frequency_other',
+'covid_test_date',
+'vaccine_status',
+'booster_status',
+'financial_stress_1',
+'financial_stress_2',
+'pcfs_subjective_scale',
+'subjective_pcs_score',
+'initial_symptom_amount',
+'persistent_symptom_amount',
+'pc_diag_time',
+'tbi_diag',
+'tbi_status',
+'tbi_date',
+'tbi_after',
+'tbi_before',
+'tbi_loc',
+'tbi_pta',
+'tbi_ams',
+'tbi_grade',
+'tbi_mild',
+'tbi_mild2',
+'tbi_mild3',
+'tbi_mild4',
+'tbi_mod',
+'tbi_mod2',
+'tbi_mod3',
+'tbi_mod4',
+'tbi_mod5',
+'tbi_sev',
+'tbi_sev2',
+'tbi_sev3',
+'tbi_sev4',
+'tbi_sev5',
+'tbi_profile',
+'post_covid_symptoms_other',
+'neuro___1',
+'neuro___2',
+'neuro___3',
+'neuro___4',
+'neuro___5',
+'neuro___6',
+'neuro___7',
+'neuro___8',
+'neuro___98',
+'neuro___99',
+'neurological_other',
+'cardio___1',
+'cardio___2',
+'cardio___3',
+'cardio___4',
+'cardio___5',
+'cardio___6',
+'cardio___7',
+'cardio___8',
+'cardio___9',
+'cardio___10',
+'cardio___98',
+'cardio___99',
+'cardio_other',
+'metabolic___1',
+'metabolic___2',
+'metabolic___3',
+'metabolic___4',
+'metabolic___5',
+'metabolic___98',
+'metabolic___99',
+'metabolic_other',
+'mentalhealth___1',
+'mentalhealth___2',
+'mentalhealth___3',
+'mentalhealth___4',
+'mentalhealth___5',
+'mentalhealth___98',
+'mentalhealth___99',
+'mental_health_other',
+'autoimmune___1',
+'autoimmune___2',
+'autoimmune___3',
+'autoimmune___4',
+'autoimmune___5',
+'autoimmune___98',
+'autoimmune___99',
+'autoimmune_other',
+#'fever_2',
+#'chills_2',
+#'headache_2',
+#'appetite_2',
+#'nose_2',
+#'throat_2',
+#'fatigue_2',
+#'brainfog_2',
+#'unrefresh_2',
+#'diffsleep_2',
+#'daysleep_2',
+#'actfatigue_2',
+#'smell_2',
+#'taste_2',
+#'ear_2',
+#'anxiety_2',
+#'depression_2',
+#'paranoid_2',
+#'hallucinations_2',
+#'cough_2',
+#'chest_2',
+#'breathrest_2',
+#'breathwalk_2',
+#'wheezing_2',
+#'lighthead_2',
+#'faint_2',
+#'sweat_2',
+#'gastro_2',
+#'color_2',
+#'urinary_2',
+'other_2_1',
+'other_2_2',
+'other_2_3',
+'health_other_1',
+'health_other_2',
+'health_other_3',
+'medsinfo',
+'cancer_tx_schedule',
+'height',
+'weight',
+'bmi',
+'intro_date',
+'covid_duration',
+'covid_duration_2',
+'covid_duration_3',
+'vaccine_first_dose',
+'vaccine_second_dose',
+'covid_proof_upload',
+#'datediff',
+'dd_bin',
+'verify')
+
+#View(rc)
+#drop_list from master RC dataset
+
+rc_drop <- rc[ , !(names(rc) %in% drop_list)] 
+```
+
+# Final NA updates
+```{r}
+rc_drop$menopause_status[is.na(rc_drop$menopause_status)] <- 0
+rc_drop$persistent_symptom_score[is.na(rc_drop$persistent_symptom_score)] <- 0
+
+rc_drop$vaccine_type <- as.character(rc_drop$vaccine_type)
+rc_drop$vaccine_menstrual <- as.character(rc_drop$vaccine_menstrual)
+rc_drop$unemployment_covid <- as.character(rc_drop$unemployment_covid)
+
+rc_drop$vaccine_type[is.na(rc_drop$vaccine_type)] <- "0"
+rc_drop$vaccine_menstrual[is.na(rc_drop$vaccine_menstrual)] <- '99'
+rc_drop$unemployment_covid[is.na(rc_drop$unemployment_covid)] <- '2'
+
+rc_drop$vaccine_type <- as.factor(rc_drop$vaccine_type)
+rc_drop$vaccine_menstrual <- as.factor(rc_drop$vaccine_menstrual)
+rc_drop$unemployment_covid <- as.factor(rc_drop$unemployment_covid)
+```
+
+```{r}
+table(rc_drop$participant_type, rc_drop$pcs_diag)
+
+
+#summary(rc_drop)
+#View(rc_drop)
+#View(gor_final)
+#summary(gor_final)
+```
+
+# Combining Gorilla and Redcap Data by Prolific ID
+```{r}
+clean <- merge(rc_drop, gor_final, by = 'prolific_id', all = T)
+
+#Drop people without Prolific ID
+clean <- clean[!is.na(clean$participant_id), ]
+
+#View(clean)
+#Drop people without Gorilla ID
+clean <- clean[!is.na(clean$gor_id), ]
+
+#Drop duplicates
+clean <- clean[!duplicated(clean$prolific_id), ]
+
+# 0 - 511, 64.8% 
+# 1 - 278, 35.2%
+dim(clean)
+table(clean$pcs_diag)
+prop.table(table(clean$pcs_diag))
+table(clean$participant_type, clean$pcs_diag)
+#View(clean)
+#summary(clean)
+```
+
+# Update data types
+```{r}
+#View(clean)
+#summary(clean)
+
+clean$participant_type <- as.factor(clean$participant_type)
+clean$sex <- as.factor(clean$sex)
+clean$gender <- as.factor(clean$gender)
+clean$menopause_status <- as.factor(clean$menopause_status)
+clean$race <- as.factor(clean$race)
+clean$ethnicity <- as.factor(clean$ethnicity)
+clean$racial_stress <- as.factor(clean$racial_stress)
+clean$residence_region <- as.factor(clean$residence_region)
+clean$residence_location_type <- as.factor(clean$residence_location_type)
+clean$healthcare_access <- as.factor(clean$healthcare_access)
+clean$nicotine_status <- as.factor(clean$nicotine_status)
+clean$alcohol_fx <- as.factor(clean$alcohol_fx)
+clean$substance_use_status <- as.factor(clean$substance_use_status)
+clean$rehab_status <- as.factor(clean$rehab_status)
+clean$edu_degree <- as.factor(clean$edu_degree)
+clean$income <- as.factor(clean$income)
+clean$unemployment_covid <- as.factor(clean$unemployment_covid)
+clean$fin_stress <- as.factor(clean$fin_stress)
+#rc$diagnosis_type <- as.factor(rc$diagnosis_type)
+clean$vaccine_type <- as.factor(clean$vaccine_type)
+clean$vaccine_menstrual <- as.factor(clean$vaccine_menstrual)
+clean$med_access <- as.factor(clean$med_access)
+clean$func_status_1 <- as.factor(clean$func_status_1)
+clean$pcfs_grade_status <- as.factor(clean$pcfs_grade_status)
+clean$allergies <- as.factor(clean$allergies)
+clean$meds <- as.factor(clean$meds)
+clean$cancer_status <- as.factor(clean$cancer_status)
+clean$radiation_status <- as.factor(clean$radiation_status)
+clean$pcs_diag <- as.factor(clean$pcs_diag)
+clean$tbi_prob <- as.factor(clean$tbi_prob)
+clean$vaccboost <- as.factor(clean$vaccboost)
+clean$tbi_covid <- as.factor(clean$tbi_covid)
+```
+
+# Final Data value Updates
+```{r}
+#summary(clean)
+
+#age outlier - fix in training or test set with median imputation
+#boxplot(clean$age)
+max(clean$age)
+clean$age[clean$age == 5769] <- 57 
+
+#participant type - combine veteran groups
+clean$participant_type <- as.character(clean$participant_type)
+clean$participant_type[clean$participant_type == 1] <- 'Vet'
+clean$participant_type[clean$participant_type == 2] <- 'Civ'
+clean$participant_type[clean$participant_type == 3] <- 'Vet'
+clean$participant_type <- as.factor(clean$participant_type)
+table(clean$participant_type)
+
+#sex other outlier - update to 1 - majority class
+clean$sex <- as.character(clean$sex)
+#since other is very small portion of sample, add to majority class
+clean$sex[clean$sex == 99] <- 'Male'
+clean$sex[clean$sex == 1] <- 'Male'
+clean$sex[clean$sex == 2] <- 'Female'
+clean$sex <- as.factor(clean$sex)
+
+#gender - combine transgender into one category - trans man and woman
+clean$gender <- as.character(clean$gender)
+clean$gender[clean$gender == 3 | clean$gender == 4] <- 'Trans'
+clean$gender[clean$gender == 5] <- 'NonBi'
+clean$gender[clean$gender == 1] <- 'Man'
+clean$gender[clean$gender == 2] <- 'Woman'
+clean$gender <- as.factor(clean$gender)
+table(clean$gender)
+
+#menopause categories
+clean$menopause_status <- as.character(clean$menopause_status)
+clean$menopause_status[clean$menopause_status == 0] <- 'NA'
+clean$menopause_status[clean$menopause_status == 1] <- 'NA'
+clean$menopause_status[clean$menopause_status == 2] <- 'Pre'
+clean$menopause_status[clean$menopause_status == 3] <- 'Peri'
+clean$menopause_status[clean$menopause_status == 4] <- 'Post'
+clean$menopause_status <- as.factor(clean$menopause_status)
+table(clean$menopause_status)
+
+#race labels
+#collapse hawaiian native, pacific islander, alaskan native, unknown, and other into one category
+table(clean$race)
+
+clean$race <- as.character(clean$race)
+clean$race[clean$race == 1] <- 'HI/PI/AL/Oth'
+clean$race[clean$race == 2] <- 'Asian'
+clean$race[clean$race == 3] <- 'Black'
+clean$race[clean$race == 4] <- 'HI/PI/AL/Oth'
+clean$race[clean$race == 5] <- 'White'
+clean$race[clean$race == 6] <- 'More'
+clean$race[clean$race == 7] <- 'HI/PI/AL/Oth'
+clean$race[clean$race == 99] <- 'HI/PI/AL/Oth'
+clean$race <- as.factor(clean$race)
+table(clean$race)
+
+#ethnicity labels
+clean$ethnicity <- as.character(clean$ethnicity)
+clean$ethnicity[clean$ethnicity == 1] <- 'His/LatX'
+clean$ethnicity[clean$ethnicity == 2] <- 'Non'
+#since 'other' is very small portion of sample, add to majority class
+clean$ethnicity[clean$ethnicity == 99] <- 'Non'
+clean$ethnicity <- as.factor(clean$ethnicity)
+table(clean$ethnicity)
+
+#region labels
+clean$residence_region <- as.character(clean$residence_region)
+clean$residence_region[clean$residence_region == 1] <- 'MW'
+clean$residence_region[clean$residence_region == 2] <- 'NE'
+clean$residence_region[clean$residence_region == 3] <- 'SE'
+clean$residence_region[clean$residence_region == 4] <- 'SW'
+clean$residence_region[clean$residence_region == 5] <- 'W'
+clean$residence_region[clean$residence_region == 6] <- 'MW'
+clean$residence_region <- as.factor(clean$residence_region)
+table(clean$residence_region)
+
+#alcohol frequencies
+clean$alcohol_fx[clean$alcohol_fx == 99] <- 0
+
+#Employment labels
+clean$unemployment_covid <- as.character(clean$unemployment_covid)
+clean$unemployment_covid[clean$unemployment_covid == 0] <- 'Unemp'
+clean$unemployment_covid[clean$unemployment_covid == 1] <- 'Cov'
+clean$unemployment_covid[clean$unemployment_covid == 2] <- 'Emp'
+clean$unemployment_covid <- as.factor(clean$unemployment_covid)
+table(clean$unemployment_covid)
+
+#Vaccine type labels
+clean$vaccine_type <- as.character(clean$vaccine_type)
+clean$vaccine_type[clean$vaccine_type == 0] <- 'None'
+clean$vaccine_type[clean$vaccine_type == 1] <- 'Pfizer'
+clean$vaccine_type[clean$vaccine_type == 2] <- 'Moderna'
+clean$vaccine_type[clean$vaccine_type == 3] <- 'J&J'
+clean$vaccine_type <- as.factor(clean$vaccine_type)
+table(clean$vaccine_type)
+
+#vaccine menstrual changes
+clean$vaccine_menstrual <- as.character(clean$vaccine_menstrual)
+clean$vaccine_menstrual[clean$vaccine_menstrual == 0] <- 'No/NA'
+clean$vaccine_menstrual[clean$vaccine_menstrual == 1] <- 'Yes'
+clean$vaccine_menstrual[clean$vaccine_menstrual == 99] <- 'No/NA'
+clean$vaccine_menstrual <- as.factor(clean$vaccine_menstrual)
+table(clean$vaccine_menstrual)
+
+#tbi probable diagnoses
+#clean$tbi_prob <- as.character(clean$tbi_prob)
+#clean$tbi_prob[clean$tbi_prob == 0] <- 'None'
+#clean$tbi_prob[clean$tbi_prob == 1] <- 'Mild'
+#clean$tbi_prob[clean$tbi_prob == 2] <- 'Mod'
+#clean$tbi_prob[clean$tbi_prob == 3] <- 'Sev'
+clean$tbi_prob <- as.factor(clean$tbi_prob)
+table(clean$tbi_prob)
+
+#TBI diagnosis before or after COVID infection
+clean$tbi_covid <- as.character(clean$tbi_covid)
+clean$tbi_covid[clean$tbi_covid == 0] <- 'NA'
+clean$tbi_covid[clean$tbi_covid == 1] <- 'Before'
+clean$tbi_covid[clean$tbi_covid == 2] <- 'After'
+clean$tbi_covid <- as.factor(clean$tbi_covid)
+table(clean$tbi_covid)
+
+#PCS Diagnosis labels
+clean$pcs_diag <- as.character(clean$pcs_diag)
+clean$pcs_diag[clean$pcs_diag == 0] <- 'Healthy'
+clean$pcs_diag[clean$pcs_diag == 1] <- 'PASC'
+clean$pcs_diag <- as.factor(clean$pcs_diag)
+prop.table(table(clean$pcs_diag))
+
+```
+
+# Descriptive Stats for Demographic Table
+## Age
+```{r}
+# Age: all
+clean %>% summarise(mean_age = mean(age), sd_age = sd(age))
+
+# Age: Veteran
+clean %>% filter(participant_type == 'Vet') %>% summarise(mean_age = mean(age), sd_age = sd(age))
+
+# Age: Civilian
+clean %>% filter(participant_type == 'Civ') %>% summarise(mean_age = mean(age), sd_age = sd(age))
+
+
+# Age: Clinical
+clean %>% filter(pcs_diag == 'PASC') %>% summarise(mean_age = mean(age), sd_age = sd(age))
+
+# Age: Non-Clinical
+clean %>% filter(pcs_diag == 'Healthy') %>% summarise(mean_age = mean(age), sd_age = sd(age))
+
+
+oneway.test(age ~ pcs_diag, data = clean)
+
+
+```
+## Particpant Type
+```{r}
+table(clean$participant_type)
+prop.table(table(clean$participant_type))
+
+clin <- clean %>% filter(pcs_diag == 'PASC')
+nonclin <- clean %>% filter(pcs_diag == 'Healthy')
+
+prop.table(table(clin$participant_type))
+table(clin$participant_type)
+
+prop.table(table(nonclin$participant_type))
+table(nonclin$participant_type)
+
+chisq.test(clean$pcs_diag, clean$participant_type)
+
+```
+## Sex
+```{r}
+#All
+table(clean$sex)
+prop.table(table(clean$sex))
+
+#Vet
+table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_s = sex))
+prop.table(table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_s = sex)))
+
+#Civ
+table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_s = sex))
+prop.table(table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_s = sex)))
+
+
+
+prop.table(table(clin$sex))
+table(clin$sex)
+
+prop.table(table(nonclin$sex))
+table(nonclin$sex)
+
+chisq.test(clean$pcs_diag, clean$sex)
+
+```
+## Gender
+```{r}
+#All
+table(clean$gender)
+prop.table(table(clean$gender))
+
+#Vet
+table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_g = gender))
+prop.table(table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_g = gender)))
+
+#Civ
+table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_g = gender))
+prop.table(table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_g = gender)))
+
+
+
+prop.table(table(clin$gender))
+table(clin$gender)
+
+prop.table(table(nonclin$gender))
+table(nonclin$gender)
+
+chisq.test(clean$pcs_diag, clean$gender)
+
+```
+## Ethnicity
+```{r}
+#summary(clean)
+
+#All
+table(clean$ethnicity)
+prop.table(table(clean$ethnicity))
+
+#Vet
+table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_e = ethnicity))
+prop.table(table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_e = ethnicity)))
+
+#Civ
+table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_e = ethnicity))
+prop.table(table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_e = ethnicity)))
+
+
+prop.table(table(clin$ethnicity))
+table(clin$ethnicity)
+
+prop.table(table(nonclin$ethnicity))
+table(nonclin$ethnicity)
+
+chisq.test(clean$pcs_diag, clean$ethnicity)
+
+```
+## Area Type
+```{r}
+#All
+table(clean$residence_location_type)
+prop.table(table(clean$residence_location_type))
+
+#Vet
+table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_a = residence_location_type))
+prop.table(table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_a = residence_location_type)))
+
+#Civ
+table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_a = residence_location_type))
+prop.table(table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_a = residence_location_type)))
+
+prop.table(table(clin$residence_location_type))
+table(clin$residence_location_type)
+
+prop.table(table(nonclin$residence_location_type))
+table(nonclin$residence_location_type)
+
+chisq.test(clean$pcs_diag, clean$residence_location_type)
+
+```
+## Race
+```{r}
+#All
+table(clean$race)
+prop.table(table(clean$race))
+
+#Vet
+table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_r = race))
+prop.table(table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_r = race)))
+
+#Civ
+table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_r = race))
+prop.table(table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_r = race)))
+
+
+prop.table(table(clin$race))
+table(clin$race)
+
+prop.table(table(nonclin$race))
+table(nonclin$race)
+
+chisq.test(clean$pcs_diag, clean$race)
+
+```
+## Degree
+```{r}
+#All
+table(clean$edu_degree)
+prop.table(table(clean$edu_degree))
+
+#Vet
+table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_d = edu_degree))
+prop.table(table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_d = edu_degree)))
+
+#Civ
+table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_d = edu_degree))
+prop.table(table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_d = edu_degree)))
+
+
+
+prop.table(table(clin$edu_degree))
+table(clin$edu_degree)
+
+prop.table(table(nonclin$edu_degree))
+table(nonclin$edu_degree)
+
+
+
+chisq.test(clean$pcs_diag, clean$edu_degree)
+```
+
+## PASC Diagnosis
+```{r}
+#All
+table(clean$pcs_diag)
+prop.table(table(clean$pcs_diag))
+
+#Vet
+table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_p = pcs_diag))
+prop.table(table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_p = pcs_diag)))
+
+#Civ
+table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_p = pcs_diag))
+prop.table(table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_p = pcs_diag)))
+
+
+prop.table(table(clin$pcs_diag))
+table(clin$pcs_diag)
+
+prop.table(table(nonclin$pcs_diag))
+table(nonclin$pcs_diag)
+```
+## Vaccine Status
+```{r}
+#All
+table(clean$vaccboost)
+prop.table(table(clean$vaccboost))
+
+#Vet
+table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_v = vaccboost))
+prop.table(table(clean %>% filter(participant_type == 'Vet') %>% reframe(vet_v = vaccboost)))
+
+#Civ
+table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_v = vaccboost))
+prop.table(table(clean %>% filter(participant_type == 'Civ') %>% reframe(civ_v = vaccboost)))
+
+
+prop.table(table(clin$vaccboost))
+table(clin$vaccboost)
+
+prop.table(table(nonclin$vaccboost))
+table(nonclin$vaccboost)
+
+
+chisq.test(clean$pcs_diag, clean$vaccboost)
+
+```
+## Reading Speed
+```{r}
+#Read: All
+summary(log(clean$read_rt_sum))
+sd(log(clean$read_rt_sum), na.rm = T)
+
+vets <- clean %>% filter(participant_type == 'Vet')
+civs <- clean %>% filter(participant_type == 'Civ')
+
+# Read: Veteran
+summary(log(vets$read_rt_sum))
+sd(log(vets$read_rt_sum), na.rm = T)
+
+# Read: Civilian
+summary(log(civs$read_rt_sum))
+sd(log(civs$read_rt_sum), na.rm = T)
+```
+## Typing Speed
+```{r}
+#Type: All
+summary(log(clean$type_rt_sum))
+sd(log(clean$type_rt_sum), na.rm = T)
+
+# Type: Veteran
+summary(log(vets$type_rt_sum))
+sd(log(vets$type_rt_sum), na.rm = T)
+
+#Type: Civilian
+summary(log(civs$type_rt_sum))
+sd(log(civs$type_rt_sum), na.rm = T)
+```
+## COVID Diagnosis Type
+```{r}
+#All
+table(clean$diagnosis_type)
+```
+
+# Numerical Exploratory Data Analysis
+## Self Report Measures
+```{r}
+sr_nums <- c('age','unemployment_length','global_qol_scale','infection_frequency',
+             'initial_symptom_score','persistent_symptom_score','pre_pandemic','peri_pandemic',
+             'peri_infection', 'post_infection', 'promis_cog_score','hit6_score','fatigue_score',
+             'gad7_tot_score','phq9_total','pss_overall_score','social_support_score',
+             'score_sig_other','score_family','score_friends','dvprs_score','dyspnoea_12_score',
+             'vdaq_score','BMI','duration', 'vacc_inf_diff','headhouse','psqi_glob', 'neuro',
+             'cardio', 'metabo', 'mental', 'auto')
+
+#corrplot(cor(clean[ , sr_nums]), method = 'circle', tl.cex = .7, number.cex = .4)
+```
+
+```{r}
+# Age x. PCS diagnosis
+age <- ggplot(clean, aes(age, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(age, title = "Age by PASC Diagnosis (normalized histogram)", xlab = 'Age',ylab = 'Count', legend.title = 'Group')
+```
+```{r}
+#ANOVA for age is not significant
+oneway.test(log(age)~pcs_diag, data = clean)
+
+#oneway.test(log(age) ~ vacc_bi, data = clean)
+#table(clean$vacc_bi)
+#anova(log(age) ~ vaccbi, data = clean)
+#oneway.test(log(age) ~ inc_bi, data = clean)
+#cor.test(x = age, y = vacctime, data = clean)
+#cor.test(clean$age, clean$vacc_inf_diff)
+#hist(clean$age)
+#earlyvax <- rc %>% filter(vaccine_first_dose < '2021-06-11')
+#earlyvax$age[earlyvax$age > 80] <- 57
+#hist(earlyvax$age)
+#length(earlyvax$age)
+#sort(earlyvax$age, decreasing = T)
+#young <- clean %>% filter(age <70)
+#oneway.test(log(age) ~ pcs_diag, data = young)
+#length(clean %>% filter(age > 70))
+#age_inc <- ggplot(clean, aes(age, fill = inc_bi)) + 
+  #geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  #theme_minimal()
+#ggpar(age_inc, title = "Age by Income (normalized histogram)", xlab = 'Age',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+# Unemployment Length x. PCS diagnosis
+unemp <- type <- ggplot(clean, aes(unemployment_length, fill = pcs_diag)) + 
+  #geom_histogram(color = 'black', position = 'fill', stat = 'count', bins = 10) +
+  geom_dotplot() +
+  theme_minimal()
+ggpar(unemp, title = "Unemployment Length by PCS Diagnosis", xlab = 'Unemployment Length',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(unemployment_length~pcs_diag, data = clean)
+```
+
+
+```{r}
+# Quality of life scale x. PCS diagnosis
+qol <- type <- ggplot(clean, aes(global_qol_scale, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(qol, title = "Quality of Life by PCS Diagnosis", xlab = 'Quality of Life (0-100)',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(global_qol_scale~pcs_diag, data = clean)
+```
+
+```{r}
+# Infection Frequency x. PCS diagnosis
+ifx <- type <- ggplot(clean, aes(infection_frequency, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() +
+  scale_x_discrete(limits = c(1:7))
+ggpar(ifx, title = "Infection Frequency by PCS Diagnosis", xlab = 'Number of COVID Infections',ylab = 'Count', legend.title = 'Group')
+```
+```{r}
+#ANOVA for age is not significant
+oneway.test(infection_frequency~pcs_diag, data = clean)
+```
+
+```{r}
+# Initial symptom score x. PCS diagnosis
+isc <- type <- ggplot(clean, aes(initial_symptom_score, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() 
+ggpar(isc, title = "Initial Symptom Score by PCS Diagnosis", xlab = 'Symptom Severity Score',ylab = 'Count', legend.title = 'Group')
+```
+```{r}
+#ANOVA for age is not significant
+oneway.test(initial_symptom_score~pcs_diag, data = clean)
+```
+
+```{r}
+# Persistent symptom score x. PCS diagnosis
+psc <- type <- ggplot(clean, aes(persistent_symptom_score, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(psc, title = "Persistent Symptom Score by PCS Diagnosis", xlab = 'Symptom Severity Score',ylab = 'Count', legend.title = 'Group')
+```
+```{r}
+#ANOVA for age is not significant
+oneway.test(persistent_symptom_score~pcs_diag, data = clean)
+```
+
+```{r}
+# Number of health conditions diagnosed before pandemic x. PCS diagnosis
+prepand <- ggplot(clean, aes(pre_pandemic, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() +
+  scale_x_discrete(limits = c(0:11))
+ggpar(prepand, title = "Pre-Pandemic Health Conditions by PCS Diagnosis", xlab = 'Number of Conditions',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(pre_pandemic~pcs_diag, data = clean)
+```
+
+
+```{r}
+# Number of health conditions diagnosed during pandemic but before COVID diagnosis x. PCS diagnosis
+peripand <- ggplot(clean, aes(peri_pandemic, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() +
+  scale_x_discrete(limits = c(0:8))
+ggpar(peripand, title = "Peri-Pandemic Health Conditions by PCS Diagnosis", xlab = 'Number of Conditions',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(peri_pandemic~pcs_diag, data = clean)
+```
+
+
+
+```{R}
+# Number of health conditions diagnosed during COVID infection x. PCS diagnosis
+periinf <- ggplot(clean, aes(peri_infection, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() +
+  scale_x_discrete(limits = c(0:4))
+ggpar(periinf, title = "Peri-Infection Health Conditions by PCS Diagnosis", xlab = 'Number of Conditions',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(peri_infection~pcs_diag, data = clean)
+```
+
+
+
+```{r}
+# Number of health conditions diagnosed after covid infection x. PCS diagnosis
+postinf <- ggplot(clean, aes(post_infection, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() +
+  scale_x_discrete(limits = c(0:7))
+ggpar(postinf, title = "Post-Infection Health Conditions by PCS Diagnosis", xlab = 'Number of Conditions',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(post_infection~pcs_diag, data = clean)
+```
+
+
+```{r}
+# PROMIS cog score (reverse scored) x. PCS diagnosis
+promiscog <- ggplot(clean, aes(promis_cog_score, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count', bins = 32) +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "solid", color = "black")
+  #scale_x_discrete(limits = c(0:11))
+ggpar(promiscog, title = "PROMIS Cognition Score by PCS Diagnosis", xlab = 'Score (reverse)', ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(promis_cog_score~pcs_diag, data = clean)
+```
+
+
+```{r}
+# HIT6 Score (headaches) x. PCS diagnosis
+hit6 <- ggplot(clean, aes(hit6_score, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:11))
+ggpar(hit6, title = "Headache Score by PCS Diagnosis", xlab = 'Score',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(hit6_score~pcs_diag, data = clean)
+```
+
+```{r}
+# Fatigue score x. PCS diagnosis
+fatsc <- ggplot(clean, aes(fatigue_score, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:11))
+ggpar(fatsc, title = "PROMIS Fatigue Score by PCS Diagnosis", xlab = 'Score',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(fatigue_score~pcs_diag, data = clean)
+```
+
+```{R}
+# Anxiety score x. PCS diagnosis
+gad7 <- ggplot(clean, aes(gad7_tot_score, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:11))
+ggpar(gad7, title = "Anxiety Score (GAD7) by PCS Diagnosis", xlab = 'Score',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(gad7_tot_score~pcs_diag, data = clean)
+```
+
+
+```{R}
+# Depression score x. PCS diagnosis
+phq9 <- ggplot(clean, aes(phq9_total, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:11))
+ggpar(phq9, title = "Depression Score (PHQ9) by PCS Diagnosis", xlab = 'Score',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(phq9_total~pcs_diag, data = clean)
+```
+
+
+```{R}
+# Perceived stress score x. PCS diagnosis
+psssc <- ggplot(clean, aes(pss_overall_score, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:11))
+ggpar(psssc, title = "Perceived Stress by PCS Diagnosis", xlab = 'Score',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(pss_overall_score~pcs_diag, data = clean)
+```
+
+
+```{R}
+# Significant Other Social Support x. PCS diagnosis
+sigother <- ggplot(clean, aes(score_sig_other, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() +
+  scale_x_discrete(limits = c(0:7))
+ggpar(sigother, title = "Significant Other Social Support by PCS Diagnosis", xlab = 'Score',ylab = 'Count', legend.title = 'Group')
+```
+
+```{R}
+# Family Social Support x. PCS diagnosis
+familyss <- ggplot(clean, aes(score_family, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() +
+  scale_x_discrete(limits = c(0:7))
+ggpar(familyss, title = "Family Social Support by PCS Diagnosis", xlab = 'Score',ylab = 'Count', legend.title = 'Group')
+```
+```{R}
+# Friends Social Support x. PCS diagnosis
+friends <- ggplot(clean, aes(score_friends, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() +
+  scale_x_discrete(limits = c(0:7))
+ggpar(friends, title = "Friend Social Support by PCS Diagnosis", xlab = 'Score',ylab = 'Count', legend.title = 'Group')
+```
+
+```{R}
+# Total Social Support x. PCS diagnosis
+tssc <- ggplot(clean, aes(social_support_score, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(tssc, title = "Total Social Support by PCS Diagnosis", xlab = 'Score',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(social_support_score~pcs_diag, data = clean)
+```
+
+
+```{R}
+# DVPRS Pain Score x. PCS diagnosis
+dvprssc <- ggplot(clean, aes(dvprs_score, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(dvprssc, title = "DVPRS Pain Score by PCS Diagnosis", xlab = 'Score',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(dvprs_score~pcs_diag, data = clean)
+```
+
+
+```{R}
+# Dyspnoea Breathing Score x. PCS diagnosis
+dyspno <- ggplot(clean, aes(dyspnoea_12_score, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(dyspno, title = "Dyspnoea Score by PCS Diagnosis", xlab = 'Score',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(dyspnoea_12_score~pcs_diag, data = clean)
+```
+
+
+```{R}
+# VDAQ Score x. PCS diagnosis
+vdaq <- ggplot(clean, aes(vdaq_score, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(vdaq, title = "Value Driven Attention Score by PCS Diagnosis", xlab = 'Score',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(vdaq_score~pcs_diag, data = clean)
+```
+
+
+```{R}
+# BMI x. PCS diagnosis
+
+#clean up outliers
+#sort(clean$BMI, decreasing = F)
+clean$BMI[clean$BMI > 60] <- 60
+clean$BMI[clean$BMI < 17] <- 17
+
+bmisc <- ggplot(clean, aes(BMI, fill = pcs_diag)) +
+  #geom_histogram(color = 'black', position = 'fill', stat = 'count', binwidth = 5) +
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(bmisc, title = "BMI by PCS Diagnosis", xlab = 'Score', ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(BMI~pcs_diag, data = clean)
+```
+
+```{R}
+# Head of household ratio x. PCS diagnosis
+house <- ggplot(clean, aes(headhouse, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(house, title = "Ratio of Self to Household Members by PCS Diagnosis", xlab = 'Ratio',ylab = 'Count', legend.title = 'Group')
+```
+
+
+
+
+```{R}
+# Duration of days infection from all covid infections x. PCS diagnosis
+#update outliers
+#sort(clean$duration, decreasing = T)
+clean$duration[clean$duration > 101] <- 100
+
+coviddur <- ggplot(clean, aes(duration, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(coviddur, title = "Duration of Days Infected with COVID by PCS Diagnosis", xlab = 'Duration',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(duration~pcs_diag, data = clean)
+```
+
+```{R}
+# Vaccine Before or After COVID in Days x. PCS diagnosis
+vacctime <- ggplot(clean, aes(vacc_inf_diff, fill = pcs_diag)) + 
+  #eom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(vacctime, title = "Timing of Vaccine by PCS Diagnosis", xlab = 'Days from Initial Infection',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(vacc_inf_diff~pcs_diag, data = clean)
+```
+
+```{R}
+# PSQI Global Scores x. PCS diagnosis
+psqisc <- ggplot(clean, aes(psqi_glob, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(psqisc, title = "PSQI Global SCore by PCS Diagnosis", xlab = 'Score',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(psqi_glob~pcs_diag, data = clean)
+```
+
+
+```{R}
+# Number of Neurological Conditions x. PCS diagnosis
+neuro <- ggplot(clean, aes(neuro, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(neuro, title = "Neurological Conditions by PCS Diagnosis", xlab = 'Number of Conditions',ylab = 'Count', legend.title = 'Group')
+```
+
+```{R}
+# Number of Cardiovascular Conditions x. PCS diagnosis
+cardio <- ggplot(clean, aes(cardio, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(cardio, title = "Cardiovascular Conditions by PCS Diagnosis", xlab = 'Number of Conditions',ylab = 'Count', legend.title = 'Group')
+```
+
+```{R}
+# Number of Metabolic Conditions x. PCS diagnosis
+metabo <- ggplot(clean, aes(metabo, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(metabo, title = "Metabolic Conditions by PCS Diagnosis", xlab = 'Number of Conditions',ylab = 'Count', legend.title = 'Group')
+```
+
+```{R}
+# Number of Autoimmune Conditions x. PCS diagnosis
+auto <- ggplot(clean, aes(auto, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(auto, title = "Autoimmune Conditions by PCS Diagnosis", xlab = 'Number of Conditions',ylab = 'Count', legend.title = 'Group')
+```
+```{R}
+# Number of mental health Conditions x. PCS diagnosis
+mental <- ggplot(clean, aes(mental, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() +
+  scale_x_discrete(limits = c(0:5))
+ggpar(mental, title = "Mental Health Conditions by PCS Diagnosis", xlab = 'Number of Conditions',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(mental~pcs_diag, data = clean)
+```
+
+
+## Cognitive Performance Measures
+```{r}
+cog_nums <- c('vs_a_rt_mn_s','vs_a_rt_sd_s','vs_a_acc_s',"vs_p_rt_mn_s", "vs_p_rt_sd_s", "vs_p_acc_s",
+              "vs_a_rt_mn_l", "vs_a_rt_sd_l", "vs_a_acc_l", "vs_p_rt_mn_l", "vs_p_rt_sd_l", "vs_p_acc_l",
+              "f_c_rt_mn", "f_c_rt_sd", "f_c_acc", "f_i_rt_mn", "f_i_rt_sd", "f_i_acc", "ds_acc", "ds_rt_mn",
+              "ds_rt_sd", "read_rt_sum", "type_rt_sum", "co", "om", "t", "attp", "t_r", "d", "hrt_m",
+              "hrt_ml", "hrt_s", "hrt_sl", "hrt_v", "hrt_vl", "b1_rt", "b6_rt", "b_diff", "per_sum",
+              "per_nt", "per_t", "per_max", "rat_e_rt_mn", "rat_e_rt_sd", "rat_e_acc", "rat_m_rt_mn",
+              "rat_m_rt_sd", "rat_m_acc", "rat_h_rt_mn", "rat_h_rt_sd", "rat_h_acc")
+
+#corrplot(cor(clean[ , cog_nums]), method = 'circle', tl.cex = .7, number.cex = .4)
+```
+
+## Visual Search Absent
+```{r}
+# Visual Search Absent Reaction Time Mean Small Array x. PCS diagnosis
+vsartmns <- ggplot(clean, aes(vs_a_rt_mn_s, fill = pcs_diag)) + 
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(vsartmns, title = "Absent Small Mean RT by PCS Diagnosis", xlab = 'Reaction Time (ms)',ylab = 'Count', legend.title = 'Group')
+```
+```{r}
+#ANOVA for age is not significant
+oneway.test(vs_a_rt_mn_s~pcs_diag, data = clean)
+```
+
+
+```{R}
+# Visual Search Absent Reaction Time SD Small Array x. PCS diagnosis
+vsartsds <- ggplot(clean, aes(vs_a_rt_sd_s, fill = pcs_diag)) + 
+  geom_dotplot(position = 'dodge') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(vsartsds, title = "Absent Small RT SD by PCS Diagnosis", xlab = 'Reaction Time (ms)',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(vs_a_rt_sd_s~pcs_diag, data = clean)
+```
+
+
+```{R}
+# Visual Search Absent Small Accuracy x. PCS diagnosis
+vsasacc <- ggplot(clean, aes(vs_a_acc_s, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(vsasacc, title = "Absent Small Accuracy by PCS Diagnosis", xlab = 'Accuracy Percentage',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(vs_a_acc_s~pcs_diag, data = clean)
+```
+
+
+```{R}
+# Visual Search Absent Reaction Time Mean Large Array x. PCS diagnosis
+vsartmnl <- ggplot(clean, aes(vs_a_rt_mn_l, fill = pcs_diag)) + 
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(vsartmnl, title = "Absent Large RT Mean by PCS Diagnosis", xlab = 'Reaction Time (ms)',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(vs_a_rt_mn_l~pcs_diag, data = clean)
+```
+
+
+```{R}
+# Visual Search Absent Reaction Time SD Large Array x. PCS diagnosis
+vsartsdl <- ggplot(clean, aes(vs_a_rt_sd_l, fill = pcs_diag)) + 
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(vsartsdl, title = "Absent Large RT SD by PCS Diagnosis", xlab = 'Reaction Time (ms)',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(vs_a_rt_sd_l~pcs_diag, data = clean)
+```
+
+```{R}
+# Visual Search Absent Large Accuracy x. PCS diagnosis
+vsalacc <- ggplot(clean, aes(vs_a_acc_l, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(vsalacc, title = "Absent Large Accuracy by PCS Diagnosis", xlab = 'Accuracy Percentage',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(vs_a_acc_l~pcs_diag, data = clean)
+```
+
+
+## Visual Search Present
+
+```{R}
+# Visual Search Present Reaction Time Mean Small Array x. PCS diagnosis
+vsprtmns <- ggplot(clean, aes(vs_p_rt_mn_s, fill = pcs_diag)) + 
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(vsprtmns, title = "Present Small Mean RT by PCS Diagnosis", xlab = 'Reaction Time (ms)',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#Update outliers
+#sort(clean$vs_p_rt_mn_s, decreasing = T)
+clean$vs_p_rt_mn_s[clean$vs_p_rt_mn_s > 3000] <- 2952.4333
+
+#ANOVA for age is not significant
+oneway.test(vs_p_rt_mn_s~pcs_diag, data = clean)
+
+t.test(vs_p_rt_mn_s~pcs_diag, data = clean)
+```
+
+```{R}
+# Visual Search Present Reaction Time SD Small Array x. PCS diagnosis
+vsprtsds <- ggplot(clean, aes(vs_p_rt_sd_s, fill = pcs_diag)) + 
+  geom_dotplot(position = 'dodge') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(vsprtsds, title = "Present Small RT SD by PCS Diagnosis", xlab = 'Reaction Time (ms)',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(vs_p_rt_sd_s~pcs_diag, data = clean)
+```
+
+```{R}
+# Visual Search Present Small Accuracy x. PCS diagnosis
+vspsacc <- ggplot(clean, aes(vs_p_acc_s, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(vspsacc, title = "Present Small Accuracy by PCS Diagnosis", xlab = 'Accuracy Percentage',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(vs_p_acc_s~pcs_diag, data = clean)
+```
+
+```{R}
+# Visual Search Present Reaction Time Mean Large Array x. PCS diagnosis
+vsprtmnl <- ggplot(clean, aes(vs_p_rt_mn_l, fill = pcs_diag)) + 
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(vsprtmnl, title = "Present Large RT Mean by PCS Diagnosis", xlab = 'Reaction Time (ms)',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(vs_p_rt_mn_l~pcs_diag, data = clean)
+```
+
+
+```{R}
+# Visual Search Present Reaction Time SD Large Array x. PCS diagnosis
+vsprtsdl <- ggplot(clean, aes(vs_p_rt_sd_l, fill = pcs_diag)) + 
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(vsprtsdl, title = "Present Large RT SD by PCS Diagnosis", xlab = 'Reaction Time (ms)',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(vs_p_rt_sd_l~pcs_diag, data = clean)
+```
+
+
+```{R}
+# Visual Search Present Large Accuracy x. PCS diagnosis
+vsplacc <- ggplot(clean, aes(vs_p_acc_l, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(vsplacc, title = "Present Large Accuracy by PCS Diagnosis", xlab = 'Accuracy Percentage',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(vs_p_acc_l~pcs_diag, data = clean)
+```
+
+
+## Flanker Incongruent
+```{R}
+#Flanker incongruent Reaction Time mean x. PCS diagnosis
+firtmn <- ggplot(clean, aes(f_i_rt_mn, fill = pcs_diag)) + 
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(firtmn, title = "Incongruent RT Mean by PCS Diagnosis", xlab = 'Reaction Time (ms)',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(f_i_rt_mn~pcs_diag, data = clean)
+```
+
+
+```{R}
+#Flanker incongruent Accuracy x. PCS diagnosis
+fiacc <- ggplot(clean, aes(f_i_acc, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(fiacc, title = "Flanker Incongruent Accuracy by PCS Diagnosis", xlab = 'Accuracy Percentage',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(f_i_acc~pcs_diag, data = clean)
+```
+
+
+## Flanker Congruent
+```{R}
+#Flanker congruent Reaction Time mean x. PCS diagnosis
+fcrtmn <- ggplot(clean, aes(f_c_rt_mn, fill = pcs_diag)) + 
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(fcrtmn, title = "Congruent RT Mean by PCS Diagnosis", xlab = 'Reaction Time (ms)',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#fix outliers
+#sort(clean$f_c_rt_mn, decreasing = T)
+clean$f_c_rt_mn[clean$f_c_rt_mn > 3000] <- 2796.7917
+
+#ANOVA for age is not significant
+oneway.test(f_c_rt_mn~pcs_diag, data = clean)
+
+
+t.test(f_c_rt_mn~pcs_diag, data = clean)
+```
+
+```{R}
+#Flanker Congruent Accuracy x. PCS diagnosis
+fcacc <- ggplot(clean, aes(f_c_acc, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(fcacc, title = "Flanker Congruent Accuracy by PCS Diagnosis", xlab = 'Accuracy Percentage',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(f_c_acc~pcs_diag, data = clean)
+```
+
+## Digit Span Forward
+```{r}
+#Digit Span Accuracy x. PCS diagnosis
+dsacc <- ggplot(clean, aes(ds_acc, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(dsacc, title = "Digit Span Accuracy by PCS Diagnosis", xlab = 'Accuracy Percentage',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(ds_acc~pcs_diag, data = clean)
+```
+
+
+```{R}
+#Digit span reaction time mean x. PCS diagnosis
+dsrtmn <- ggplot(clean, aes(ds_rt_mn, fill = pcs_diag)) + 
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(dsrtmn, title = "Digit Span RT Mean by PCS Diagnosis", xlab = 'Reaction Time (ms)',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(ds_rt_mn~pcs_diag, data = clean)
+```
+
+
+```{R}
+#Digit span reaction time sd x. PCS diagnosis
+dsrtsd <- ggplot(clean, aes(ds_rt_sd, fill = pcs_diag)) + 
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(dsrtsd, title = "Digit Span RT SD by PCS Diagnosis", xlab = 'Reaction Time (ms)',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(ds_rt_sd~pcs_diag, data = clean)
+```
+
+## Reading Time
+```{R}
+#Reading time x. PCS diagnosis
+#sort(clean$read_rt_sum, decreasing = T)
+#clean$read_rt_sum[clean$read_rt_sum == 1627352.052] <- 188663.120 
+#update outlier
+
+readtime <- ggplot(clean, aes(read_rt_sum, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(readtime, title = "Reading Time by PCS Diagnosis", xlab = 'Reaction Time (ms)',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(read_rt_sum~pcs_diag, data = clean)
+```
+
+
+## Typing Time
+```{R}
+#Typing time x. PCS diagnosis
+#sort(clean$type_rt_sum, decreasing = T)
+
+typetime <- ggplot(clean, aes(type_rt_sum, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(typetime, title = "Typing Time by PCS Diagnosis", xlab = 'Reaction Time (ms)',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(type_rt_sum~pcs_diag, data = clean)
+```
+
+## CPT Metrics
+```{r}
+#CPT Commissions x. PCS Diagnosis
+cptco <- ggplot(clean, aes(co, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(cptco, title = "CPT Commissions by PCS Diagnosis", xlab = 'Rate',ylab = 'Count', legend.title = 'Group') 
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(co~pcs_diag, data = clean)
+```
+
+
+```{r}
+#CPT Omissions x. PCS Diagnosis
+cptom <- ggplot(clean, aes(om, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(cptom, title = "CPT Omissions by PCS Diagnosis", xlab = 'Rate', ylab = 'Count', legend.title = 'Group') 
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(om~pcs_diag, data = clean)
+```
+
+```{r}
+#Target Rate x. PCS Diagnosis
+cpttr <- ggplot(clean, aes(t_r, fill = pcs_diag)) + 
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(cpttr, title = "CPT Target Rate by PCS Diagnosis", xlab = 'Rate', ylab = 'Count', legend.title = 'Group') 
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(t_r~pcs_diag, data = clean)
+```
+
+
+```{r}
+#D Prime - target discriminability - ratio of nontargets to targets -  x. PCS Diagnosis
+
+#fix outlier
+#sort(clean$d, decreasing = T)
+#clean$d[clean$d > 1] <- 0.169014085
+
+cptd <- ggplot(clean%>%filter(d<1), aes(d, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(cptd, title = "Target Discriminability by PCS Diagnosis", xlab = 'D Prime Rate', ylab = 'Count', legend.title = 'Group') 
+```
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(d~pcs_diag, data = clean)
+```
+
+
+```{r}
+#Hit Reaction Time Mean  x. PCS Diagnosis
+cpthrtm <- ggplot(clean, aes(hrt_m, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(cpthrtm, title = "Hit Reaction Time Mean by PCS Diagnosis", xlab = 'Reacion Time (ms)', ylab = 'Count', legend.title = 'Group') 
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(hrt_m~pcs_diag, data = clean)
+```
+
+
+```{r}
+#Hit Reaction Time SD  x. PCS Diagnosis
+cpthrts <- ggplot(clean, aes(hrt_s, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(cpthrts, title = "Hit Reaction Time SD by PCS Diagnosis", xlab = 'Reacion Time (ms)', ylab = 'Count', legend.title = 'Group') 
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(hrt_s~pcs_diag, data = clean)
+```
+
+
+```{r}
+#Hit Reaction Time Variability  x. PCS Diagnosis
+cpthrtv <- ggplot(clean, aes(hrt_v, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(cpthrtv, title = "Hit Reaction Time Variability by PCS Diagnosis", xlab = 'Reacion Time (ms)', ylab = 'Count', legend.title = 'Group') 
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(hrt_v~pcs_diag, data = clean)
+```
+
+
+```{r}
+#Sustained Attention - difference between RT in block 1 vs. block 6 -  x. PCS Diagnosis
+cptsa <- ggplot(clean, aes(b_diff, fill = pcs_diag)) + 
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(cptsa, title = "Sustained Reaction Time by PCS Diagnosis", xlab = 'Reacion Time (ms)', ylab = 'Count', legend.title = 'Group') 
+```
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(b_diff~pcs_diag, data = clean)
+```
+
+
+```{r}
+#Perseverations -  x. PCS Diagnosis
+cptper <- ggplot(clean, aes(per_sum, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(cptper, title = "Perseverations by PCS Diagnosis", xlab = 'Frequency', ylab = 'Count', legend.title = 'Group') 
+```
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(per_sum~pcs_diag, data = clean)
+```
+
+## CPT Profiles
+### Sustained Attention
+```{r}
+#Sustained Attention Profile
+
+#create binary variable for each metric: below average and above average
+clean$om_bi <- if_else(clean$om_diff < 0, 1, 0)
+clean$co_bi <- if_else(clean$co_diff < 0, 1, 0)
+clean$bdiff_bi <- if_else(clean$b_diff < 0, 1, 0)
+clean$sus_att <- clean$om_bi+clean$co_bi+clean$bdiff_bi
+hist(clean$sus_att)
+
+sustained <- ggplot(clean, aes(sus_att, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(sustained, title = "Sustained Attention by PCS Diagnosis", xlab = 'Score', ylab = 'Count', legend.title = 'Group') 
+```
+
+
+
+### Inattentiveness, Impulsivity, Conservative 
+```{r}
+#omission rate
+clean$om_z <- scale(clean$om, center = T, scale = T)
+hist(clean$om_z)
+
+#commission rate
+clean$co_z <- scale(clean$co, center = T, scale = T)
+#hist(clean$co_z)
+
+#reaction time mean
+clean$hrt_m_z <- scale(clean$hrt_m, center = T, scale = T)
+#hist(clean$hrt_m_z)
+
+#reaction time SD
+clean$hrt_sd_z <- scale(clean$hrt_s, center = T, scale = T)
+#hist(clean$hrt_sd_z)
+
+#reaction time variability
+clean$hrt_v_z <- scale(clean$hrt_v, center = T, scale = T)
+#hist(clean$hrt_v_z)
+
+
+#d prime
+clean$d_z <- scale(clean$d, center = T, scale = T)
+hist(clean$d_z)
+
+#perseverations
+clean$per_z <- scale(clean$per_sum, center = T, scale = T)
+#hist(clean$per_z)
+
+#target rate
+clean$t_r_z <- scale(clean$t_r, center = T, scale = T)
+#hist(clean$t_r_z)
+
+
+#create binary variable for each metric: below average and above average
+clean$om_z <- if_else(clean$om_z >= 0, 1, 0)
+clean$co_z <- if_else(clean$co_z >= 0, 1, 0)
+clean$hrt_m_z <- if_else(clean$hrt_m_z >= 0, 1, 0)
+clean$hrt_sd_z <- if_else(clean$hrt_sd_z >= 0, 1, 0)
+clean$hrt_v_z <- if_else(clean$hrt_v_z >= 0, 1, 0)
+clean$d_z <- if_else(clean$d_z >= 0, 1, 0)
+clean$per_z <- if_else(clean$per_z >= 0, 1, 0)
+clean$t_r_z <- if_else(clean$t_r_z >= 0, 1, 0)
+
+#create variables for inattentive, impulsive, conservative
+clean$cpt_inatt <- if_else((clean$om_z==1 & clean$co_z==1 & clean$hrt_m_z==0 &
+                              clean$hrt_sd_z == 1 & clean$hrt_v_z == 1), 1, 0)
+clean$cpt_imp <- if_else((clean$co_z==1 & clean$hrt_m_z==1) | 
+                           (clean$co_z ==1 & clean$hrt_m_z ==1 & clean$per_z == 1), 2, 0)
+clean$cpt_con <- if_else((clean$co_z==0 & clean$om_z==0 & clean$hrt_m_z == 0), 3, 0)
+clean$cpt_profile <- clean$cpt_inatt + clean$cpt_imp + clean$cpt_con
+table(clean$cpt_profile)
+
+#CPT Profile  by PCS Diagnosis
+cptprofile <- ggplot(clean, aes(cpt_profile, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(cptprofile, title = "CPT Profile by PCS Diagnosis", xlab = 'Profile',ylab = 'Count', legend.title = 'Group')
+```
+
+
+# Drop Extra Variables from CPT Analysis
+```{r}
+drop_cpt <- list('om_diff_z', 'co_diff_z', 'b_diff_z', 'om_bi', 'co_bi', 'bdiff_bi',
+                 "om_z", "co_z", "hrt_m_z", "hrt_sd_z", "d_z", "per_z", "t_r_z", "cpt_inatt",
+                 "cpt_imp", "cpt_con")
+clean <- clean[ , !(names(clean) %in% drop_cpt)] 
+dim(clean)
+```
+
+## Remote Associates Test
+```{r}
+#Remote associates easy condition - reaction time mean - x. PCS Diagnosis
+ratertmn <- ggplot(clean, aes(rat_e_rt_mn, fill = pcs_diag)) + 
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(ratertmn, title = "RAT Easy RT Mean by PCS Diagnosis", xlab = 'Reaction Time', ylab = 'Count', legend.title = 'Group') 
+```
+
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(rat_e_rt_mn~pcs_diag, data = clean)
+```
+
+```{r}
+#Remote associates easy condition - accuracy - x. PCS Diagnosis
+rateacc <- ggplot(clean, aes(rat_e_acc, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(rateacc, title = "RAT Easy Accuracy by PCS Diagnosis", xlab = 'Percentage', ylab = 'Count', legend.title = 'Group') 
+```
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(rat_e_acc~pcs_diag, data = clean)
+```
+
+```{r}
+#Remote associates medium condition - reaction time mean - x. PCS Diagnosis
+ratmrtmn <- ggplot(clean, aes(rat_m_rt_mn, fill = pcs_diag)) + 
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(ratmrtmn, title = "RAT Medium RT Mean by PCS Diagnosis", xlab = 'Reaction Time', ylab = 'Count', legend.title = 'Group') 
+```
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(rat_m_rt_mn~pcs_diag, data = clean)
+```
+
+```{r}
+#Remote associates medium condition - accuracy - x. PCS Diagnosis
+ratmacc <- ggplot(clean, aes(rat_m_acc, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(ratmacc, title = "RAT Medium Accuracy by PCS Diagnosis", xlab = 'Percentage', ylab = 'Count', legend.title = 'Group') 
+```
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(rat_m_acc~pcs_diag, data = clean)
+```
+
+
+```{r}
+#Remote associates hard condition - reaction time mean - x. PCS Diagnosis
+rathrtmn <- ggplot(clean, aes(rat_h_rt_mn, fill = pcs_diag)) + 
+  geom_dotplot() +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(rathrtmn, title = "RAT Hard RT Mean by PCS Diagnosis", xlab = 'Reaction Time', ylab = 'Count', legend.title = 'Group') 
+```
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(rat_h_rt_mn~pcs_diag, data = clean)
+```
+
+```{r}
+#Remote associates hard condition - accuracy - x. PCS Diagnosis
+rathacc <- ggplot(clean, aes(rat_h_acc, fill = pcs_diag)) + 
+  geom_dotplot(position = 'jitter') +
+  theme_minimal() #+
+  #scale_x_discrete(limits = c(0:7))
+ggpar(rathacc, title = "RAT Hard Accuracy by PCS Diagnosis", xlab = 'Percentage', ylab = 'Count', legend.title = 'Group') 
+```
+
+
+```{r}
+#ANOVA for age is not significant
+oneway.test(rat_h_acc~pcs_diag, data = clean)
+```
+
+# Categorical Exloratory Data Analysis - Normalized Bar Charts by Categorical Level
+```{r}
+#clean$cpt_profile <- as.factor(clean$cpt_profile)
+
+
+cats <- c('participant_type', 'sex', 'gender', 'menopause_status', 'race', 'edu_degree',
+          'ethnicity', 'racial_stress', 'residence_region', 'residence_location_type',
+          'healthcare_access', 'nicotine_status', 'alcohol_fx', 'substance_use_status',
+          'rehab_status', 'income', 'unemployment_covid', 'vaccine_type', 'vaccine_menstrual',
+          'med_access', 'fin_stress', 'func_status_1', 'pcfs_grade_status', 
+          'allergies', 'meds', 'cancer_status', 'radiation_status', 'pcs_diag', 'tbi_prob',
+          'vaccboost', 'tbi_covid', 'cpt_profile')
+```
+
+```{r}
+#cpt profile x. pcs diagnosis
+cptx2 <- ggplot(clean, aes(cpt_profile, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(cptx2, title = "CPT Profile by PCS Diagnosis", xlab = 'Profile',ylab = 'Count', legend.title = 'Group')
+#table(clean$cpt_profile)
+```
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$cpt_profile)
+```
+
+```{r}
+#participant type x. pcs diagnosis
+type <- ggplot(clean, aes(participant_type, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(type, title = "Participant Type by PCS Diagnosis", xlab = 'Participant Type',ylab = 'Count', legend.title = 'Group')
+
+```
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$participant_type)
+prop.table(table(clean$participant_type))
+```
+
+```{r}
+#sex x. pcs diagnosis
+sex <- ggplot(clean, aes(sex, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(sex, title = "Sex by PCS Diagnosis", xlab = 'Sex',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$sex)
+prop.table(table(clean$sex))
+```
+
+```{r}
+#gender x. pcs diagnosis
+gender <- ggplot(clean, aes(gender, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(gender, title = "Gender by PCS Diagnosis", xlab = 'Gender',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$gender)
+prop.table(table(clean$gender))
+```
+
+```{r}
+#menopause x. pcs diagnosis
+meno <- ggplot(clean, aes(menopause_status, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(meno, title = "Menopause Status by PCS Diagnosis", xlab = 'Menopause Status',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$menopause_status)
+```
+
+```{r}
+#race x. pcs diagnosis
+race <- ggplot(clean, aes(race, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(race, title = "Race by PCS Diagnosis", xlab = 'Race',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$race)
+prop.table(table(clean$race))
+```
+
+```{r}
+#ethnicity x. pcs diagnosis
+ethn <- ggplot(clean, aes(ethnicity, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(ethn, title = "Ethnicity by PCS Diagnosis", xlab = 'Ethnicity',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$ethnicity)
+prop.table(table(clean$ethnicity))
+```
+
+
+```{r}
+#racial stress x. pcs diagnosis
+racestress <- ggplot(clean, aes(racial_stress, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(racestress, title = "Racial Stress by PCS Diagnosis", xlab = 'Racial Stress',ylab = 'Count', legend.title = 'Group')
+```
+
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$racial_stress)
+```
+
+
+```{r}
+#residence region x. pcs diagnosis
+resregion <- ggplot(clean, aes(residence_region, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(resregion, title = "Residence Region by PCS Diagnosis", xlab = 'Residence Region',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$residence_region)
+prop.table(table(clean$residence_region))
+```
+
+
+```{r}
+#residence location type x. pcs diagnosis
+restype <- ggplot(clean, aes(residence_location_type, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(restype, title = "Residence Location Type by PCS Diagnosis", xlab = 'Residence Location Type',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$residence_location_type)
+prop.table(table(clean$residence_location_type))
+```
+
+```{r}
+#healthcare access x. pcs diagnosis
+health <- ggplot(clean, aes(healthcare_access, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(health, title = "Healthcare Access by PCS Diagnosis", xlab = 'Healthcare Access',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$healthcare_access)
+```
+
+```{r}
+#nicotine use x. pcs diagnosis
+nico <- ggplot(clean, aes(nicotine_status, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(nico, title = "Nicotine Use by PCS Diagnosis", xlab = 'Nicotine Use',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$nicotine_status)
+```
+
+```{r}
+#alcohol use x. pcs diagnosis
+alco <- ggplot(clean, aes(alcohol_fx, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(alco, title = "Alcohol Use by PCS Diagnosis", xlab = 'Alcohol Use',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$alcohol_fx)
+```
+
+```{r}
+#substance use x. pcs diagnosis
+subuse <- ggplot(clean, aes(substance_use_status, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(subuse, title = "Substance Use by PCS Diagnosis", xlab = 'Substance Use Status',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$substance_use_status)
+```
+
+```{r}
+#rehab x. pcs diagnosis
+rehab <- ggplot(clean, aes(rehab_status, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(rehab, title = "Rehab Status by PCS Diagnosis", xlab = 'Rehab Status',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$rehab_status)
+```
+
+
+```{r}
+#education x. pcs diagnosis
+edu <- ggplot(clean, aes(edu_degree, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(edu, title = "Education Degree by PCS Diagnosis", xlab = 'Years of Education',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$edu_degree)
+prop.table(table(clean$edu_degree))
+```
+
+```{r}
+#income x. pcs diagnosis
+income <- ggplot(clean, aes(income, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(income, title = "Income by PCS Diagnosis", xlab = 'Income Bracket',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$income)
+```
+
+```{r}
+#employment stats x. pcs diagnosis
+empl <- ggplot(clean, aes(unemployment_covid, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(empl, title = "Employment Status by PCS Diagnosis", xlab = 'Employment Status',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$unemployment_covid)
+```
+
+```{r}
+#financial stress from pandemic x. pcs diagnosis
+finstress <- ggplot(clean, aes(fin_stress, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(finstress, title = "Financial Stress by PCS Diagnosis", xlab = 'Financial Stress Rating',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$fin_stress)
+```
+
+```{r}
+#vaccine type x. pcs diagnosis
+vaccine <- ggplot(clean, aes(vaccine_type, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(vaccine, title = "Vaccine Type by PCS Diagnosis", xlab = 'Vaccine Type',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$vaccine_type)
+```
+
+```{r}
+#menstrual changes from vaccine x. pcs diagnosis
+menstrual <- ggplot(clean, aes(vaccine_menstrual, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(menstrual, title = "Vaccine-Related Menstrual Changes by PCS Diagnosis", xlab = 'Menstrual Changes',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$vaccine_menstrual)
+```
+
+```{r}
+#medical access discrimination x. pcs diagnosis
+meddisc <- ggplot(clean, aes(med_access, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(meddisc, title = "Medical Discrimination by PCS Diagnosis", xlab = 'Medical Discrimination',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$med_access)
+```
+
+```{r}
+#funcional status during initial covid infection x. pcs diagnosis
+func1 <- ggplot(clean, aes(func_status_1, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(func1, title = "Initial Infection Functional Status by PCS Diagnosis", xlab = 'Functional Status',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$func_status_1)
+```
+
+```{r}
+#pcfs objective grade status - Stanford rating x. pcs diagnosis
+pcfs <- ggplot(clean, aes(pcfs_grade_status, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(pcfs, title = "PCFS Rating by PCS Diagnosis", xlab = 'PCFS Objective Rating',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$pcfs_grade_status)
+```
+
+```{r}
+#allergies x. pcs diagnosis
+allerg <- ggplot(clean, aes(allergies, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(allerg, title = "History of Allergies by PCS Diagnosis", xlab = 'Allergy Status',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$allergies)
+```
+
+
+
+```{r}
+#meds x. pcs diagnosis
+meds <- ggplot(clean, aes(meds, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(meds, title = "Current Medication Use by PCS Diagnosis", xlab = 'Medication Use',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$meds)
+```
+
+
+
+```{r}
+#cancer status x. pcs diagnosis
+cancer <- ggplot(clean, aes(cancer_status, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(cancer, title = "History of Cancer by PCS Diagnosis", xlab = 'Cancer Status',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$cancer_status)
+```
+
+```{r}
+#cancer treatment status x. pcs diagnosis
+cancertx <- ggplot(clean, aes(radiation_status, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(cancertx, title = "History of Cancer Treatment by PCS Diagnosis", xlab = 'Treatment Status',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$radiation_status)
+```
+
+```{r}
+#tbi history x. pcs diagnosis
+tbihist <- ggplot(clean, aes(tbi_prob, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(tbihist, title = "TBI Diagnosis by PCS Diagnosis", xlab = 'Probable Diagnosis',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$tbi_prob)
+```
+
+```{r}
+#vaccination potency - boosted or not - x. pcs diagnosis
+boost <- ggplot(clean, aes(vaccboost, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(boost, title = "Vaccination Boost Status by PCS Diagnosis", xlab = 'Boost Status', ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$vaccboost)
+```
+
+
+```{r}
+#date of TBI diagnosis with relation to covid infection x. pcs diagnosis
+tbiwhen <- ggplot(clean, aes(tbi_covid, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(tbiwhen, title = "Date of TBI by PCS Diagnosis", xlab = 'TBI Occurrence',ylab = 'Count', legend.title = 'Group')
+```
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$tbi_covid)
+```
+
+
+
+
+# Timeseries Exploratory Data Analysis - Exploratory Timeplots
+```{r}
+# Distribution of time
+hist(clean$datediff)  # Positively skewed with least amount of data above 150 weeks 
+```
+
+
+## Visualizing length of time with post-covid symptoms vs. other variables
+```{r}
+# Subjective report of symptom severity and length of time with condition
+time.sev <- ggplot(clean %>% filter(pcs_diag == 'PASC' & datediff < 200), aes(x = datediff, y = persistent_symptom_score)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = 'Symptom Severity over Time', x = 'Time (weeks)', y = 'Symptom Severity Score') +
+  scale_x_continuous(breaks = c(0,25,50,75,100,125,150,175,200), labels = c(0,25,50,75,100,125,150,175,200)) +
+  geom_smooth(lwd = 2)
+
+time.sev
+```
+```{r}
+# Objective rating of condition impact and length of time with condition
+time.obj <- ggplot(clean %>% filter(pcs_diag == 'PASC' & datediff < 200), aes(x = datediff, y = as.numeric(pcfs_grade_status))) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = 'Objective Impact and Time', x = 'Time (weeks)', y = 'PASC Grade Score') +
+  scale_x_continuous(breaks = c(0,25,50,75,100,125,150,175,200), labels = c(0,25,50,75,100,125,150,175,200)) +
+  geom_smooth(lwd = 2)
+
+time.obj
+
+```
+
+# Correlation between time and severity
+```{r}
+pasc <- clean %>% filter(pcs_diag == 'PASC')
+cor.test(pasc$datediff, pasc$persistent_symptom_score)
+```
+# Correlation between time and objective condition impact
+```{r}
+cor.test(pasc$datediff, as.numeric(pasc$pcfs_grade_status))
+```
+```{r}
+table(clean$pcs_diag)
+
+```
+# Symptom Profile Analysis
+```{r}
+pcs <- rc_drop %>% filter(pcs_diag == 1)
+#View(pcs)
+
+#update persistent, qualitative symptoms to key words
+#pcs$other_symp_1[pcs$other_symp_1 == 'Livedo Reticularis'] <- 'Circulation'
+#pcs$other_symp_1[pcs$other_symp_1 == 'Change in smell of bowel movements and passing gas'] <- "AbdominalUpset"
+#pcs$other_symp_1[pcs$other_symp_1 == 'Circulation'] <- "Circulation"
+#pcs$other_symp_1[pcs$other_symp_1 == 'decreased vision'] <- "BlurredVision"
+
+#update symptom severity numbers to label of symptom word
+pcs$fever_2 <- if_else(pcs$fever_2 > 0,'Fever','')
+pcs$chills_2 <- if_else(pcs$chills_2 > 0,'Chills','')
+pcs$headache_2 <- if_else(pcs$headache_2 > 0,'Headaches','')
+pcs$appetite_2 <- if_else(pcs$appetite_2 > 0,'Appetite','')
+pcs$nose_2 <- if_else(pcs$nose_2 > 0,'Sinuses','')
+pcs$throat_2 <- if_else(pcs$throat_2 > 0,'SoreThroat','')
+pcs$fatigue_2 <- if_else(pcs$fatigue_2 > 0,'Fatigue','')
+pcs$brainfog_2 <- if_else(pcs$brainfog_2 > 0,'BrainFog','')
+pcs$unrefresh_2 <- if_else(pcs$unrefresh_2 > 0,'Unrested','')
+pcs$diffsleep_2 <- if_else(pcs$diffsleep_2 > 0,'Insomnia','')
+pcs$daysleep_2 <- if_else(pcs$daysleep_2 > 0,'DaytimeSleepy','')
+pcs$actfatigue_2 <- if_else(pcs$actfatigue_2 > 0,'Exertion','')
+pcs$smell_2 <- if_else(pcs$smell_2 > 0,'Parosmia','')
+pcs$taste_2 <- if_else(pcs$taste_2 > 0,'Ageusia','')
+pcs$ear_2 <- if_else(pcs$ear_2 > 0,'EarPain','')
+pcs$anxiety_2 <- if_else(pcs$anxiety_2 > 0,'Anxiety','')
+pcs$depression_2 <- if_else(pcs$depression_2 > 0,'Depression','')
+pcs$paranoid_2 <- if_else(pcs$paranoid_2 > 0,'Paranoia','')
+pcs$hallucinations_2 <- if_else(pcs$hallucinations_2 > 0,'Hallucinations','')
+pcs$cough_2 <- if_else(pcs$cough_2 > 0,'PersistentCough','')
+pcs$chest_2 <- if_else(pcs$chest_2 > 0,'ChestPain','')
+pcs$breathrest_2 <- if_else(pcs$breathrest_2 > 0,'TroubleBreathing','')
+pcs$breathwalk_2 <- if_else(pcs$breathwalk_2 > 0,'TroubleBreathing','')
+pcs$wheezing_2 <- if_else(pcs$wheezing_2 > 0,'Wheezing','')
+pcs$lighthead_2 <- if_else(pcs$lighthead_2 > 0,'Lightheaded','')
+pcs$faint_2 <- if_else(pcs$faint_2 > 0,'Fainting','')
+pcs$sweat_2 <- if_else(pcs$sweat_2 > 0,'Sweating','')
+pcs$gastro_2 <- if_else(pcs$gastro_2 > 0,'AbdominalUpset','')
+pcs$color_2 <- if_else(pcs$color_2 > 0,'SkinColor','')
+pcs$urinary_2 <- if_else(pcs$urinary_2 > 0,'Incontinence','')
+
+
+#update word label for qualitative symptoms
+
+
+#calculate frequencies of symptoms
+#pcs$other_2_1 <- as.character(pcs$other_2_1)
+#pcs$other_2_2 <- as.character(pcs$other_2_2)
+#pcs$other_2_3 <- as.character(pcs$other_2_3)
+
+#pcs[4,34] <- pcs[4,1]
+#pcs[6,34] <- pcs[6,1]
+#pcs[70,34] <- pcs[70,1]
+#pcs[75,34] <- pcs[75,1]
+#pcs[119,34] <- pcs[119,1]
+#pcs[130,34] <- pcs[130,1]
+#pcs[201,34] <- pcs[201,1]
+#pcs[240,34] <- pcs[240,1]
+#pcs[248,34] <- pcs[248,1]
+#pcs[272,34] <- pcs[272,1]
+#pcs[284,34] <- pcs[284,1]
+#pcs[327,34] <- pcs[327,1]
+#pcs[329,34] <- pcs[329,1]
+#pcs[440,34] <- pcs[440,1]
+#pcs[444,34] <- pcs[444,1]
+#pcs[468,34] <- pcs[468,1]
+#pcs[480,34] <- pcs[480,1]
+#pcs[6,35] <- pcs[6,2]
+#pcs[75,35] <- pcs[75,2]
+#pcs[119,35] <- pcs[119,2]
+#pcs[124,35] <- pcs[124,2]
+#pcs[130,35] <- pcs[130,2]
+#pcs[243,35] <- pcs[243,2]
+#pcs[248,35] <- pcs[248,2]
+#pcs[272,35] <- pcs[272,2]
+##pcs[425,35] <- pcs[425,2]
+#pcs[272,36] <- pcs[272,3]
+
+#View(pcs)
+
+#calculate word frequencies
+fever_pcs <- sum(pcs$fever_2 == 'Fever', na.rm=TRUE)
+chills_pcs <- sum(pcs$chills_2 == 'Chills', na.rm=TRUE)
+headache_pcs <- sum(pcs$headache_2 == 'Headaches', na.rm=TRUE)+1
+appetite_pcs <- sum(pcs$appetite_2 == 'Appetite', na.rm=TRUE)
+nose_pcs <- sum(pcs$nose_2 == 'Sinuses', na.rm=TRUE)
+throat_pcs <- sum(pcs$throat_2 == 'SoreThroat', na.rm=TRUE)
+fatigue_pcs <- sum(pcs$fatigue_2 == 'Fatigue', na.rm=TRUE)+2
+brainfog_pcs <- sum(pcs$brainfog_2 == 'BrainFog', na.rm=TRUE)+2
+unrested_pcs <- sum(pcs$unrefresh_2 == 'Unrested', na.rm=TRUE)
+insomnia_pcs <- sum(pcs$diffsleep_2 == 'Insomnia', na.rm=TRUE)
+daysleepy_pcs <- sum(pcs$daysleep_2 == 'DaytimeSleepy', na.rm=TRUE)+1
+exertion_pcs <- sum(pcs$actfatigue_2 == 'Exertion', na.rm=TRUE)
+
+#separate
+#smell_pcs <- sum(pcs$smell_2 == 'Parosmia', na.rm=TRUE)
+taste_pcs <- sum(pcs$taste_2 == 'Ageusia', na.rm=TRUE)
+#together
+#anosmia_pcs <- smell_pcs+taste_pcs
+
+ear_pcs <- sum(pcs$ear_2 == 'EarPain', na.rm=TRUE)
+anxiety_pcs <- sum(pcs$anxiety_2 == 'Anxiety', na.rm=TRUE)
+depression_pcs <- sum(pcs$depression_2 == 'Depression', na.rm=TRUE)+1
+paranoia_pcs <- sum(pcs$paranoid_2 == 'Paranoia', na.rm=TRUE)
+hallucinations_pcs <- sum(pcs$hallucinations_2 == 'Hallucinations', na.rm=TRUE)
+cough_pcs <- sum(pcs$cough_2 == 'PersistentCough', na.rm=TRUE)
+chest_pcs <- sum(pcs$chest_2 == 'ChestPain', na.rm=TRUE)
+breath_pcs <- sum(pcs$breathrest_2 == 'TroubleBreathing' & pcs$breathwalk_2 == 'TroubleBreathing', na.rm=TRUE)+4
+wheezing_pcs <- sum(pcs$wheezing_2 == 'Wheezing', na.rm=TRUE)
+lightheaded_pcs <- sum(pcs$lighthead_2 == 'Lightheaded', na.rm=TRUE)
+faint_pcs <- sum(pcs$faint_2 == 'Fainting', na.rm=TRUE)+1
+sweat_pcs <- sum(pcs$sweat_2 == 'Sweating', na.rm=TRUE)
+abdom_pcs <- sum(pcs$gastro_2 == 'AbdominalUpset', na.rm=TRUE)
+color_pcs <- sum(pcs$color_2 == 'SkinColor', na.rm=TRUE)
+urinary_pcs <- sum(pcs$urinary_2 == 'Incontinence', na.rm=TRUE)+1
+#all vet sample only
+bodypain_pcs <- 1+1
+
+
+#combine all word frequencies into matrix
+freq_pcs <- rbind(fever_pcs, chills_pcs, headache_pcs, appetite_pcs, nose_pcs, throat_pcs, fatigue_pcs,
+                  brainfog_pcs, unrested_pcs, insomnia_pcs, daysleepy_pcs, exertion_pcs, taste_pcs, 
+                  ear_pcs, anxiety_pcs, depression_pcs, paranoia_pcs, hallucinations_pcs,
+                  cough_pcs, chest_pcs, breath_pcs, wheezing_pcs, lightheaded_pcs, faint_pcs, 
+                  sweat_pcs, abdom_pcs, color_pcs, urinary_pcs, bodypain_pcs)
+#freq_pcs
+
+#create name vector for word labels
+names_pcs <- as.matrix(c('Fever','Chills','Headaches','Appetite','Sinuses','SoreThroat','Fatigue','BrainFog',
+                         'Unrested','Insomnia','DaytimeSleepy','Exertion','LossSmell/Taste','EarPain',
+                         'Anxiety','Depression','Paranoia','Hallucinations','PersistentCough',
+                         'ChestPain','TroubleBreathing','Wheezing','Lightheaded','Fainting','Sweating',
+                         'AbdominalUpset','SkinColor','Incontinence','BodyPain'))
+
+#subset data for all persistent people
+#pcs_n <- subset(pcs, pcs_diag == 1)
+#View(pcs_n)
+#dim(pcs_n)[1]
+
+#create data frame with frequencies and words
+pcs_cloud_df_prep <- as.data.frame(cbind(names_pcs,freq_pcs))
+colnames(pcs_cloud_df_prep)[1] <- "word"
+colnames(pcs_cloud_df_prep)[2] <- "freq"
+pcs_cloud_df_prep$freq <- as.numeric(pcs_cloud_df_prep$freq)
+pcs_cloud_df_prep$prop <- round((pcs_cloud_df_prep$freq/dim(pcs)[1]),2)
+
+
+pcs_cloud_df <- pcs_cloud_df_prep[order(-pcs_cloud_df_prep$prop),]
+#pcs_cloud_df
+
+#barplot of all symptoms
+#View(pcs_cloud_df)
+pcs_cloud_df$color <- if_else(pcs_cloud_df$word == 'Fatigue' | pcs_cloud_df$word == 'BrainFog', 'red', 'grey')
+                                #pcs_cloud_df$word == 'Insomnia' |
+                                #pcs_cloud_df$word == 'BrainFog' | pcs_cloud_df$word == 'Exertion' |
+                                #pcs_cloud_df$word == 'DaytimeSleepy', 'red', 'grey')
+
+library(extrafont)
+#change font to TNR
+windowsFonts(A = windowsFont('Times New Roman'))
+
+pcs_bar <- ggplot(data = pcs_cloud_df[1:15,], aes(x = reorder(word, +freq), fill = color, y = prop)) + geom_bar(stat = 'identity', show.legend = F) + 
+  labs(x = 'Symptom', y = 'Proportion of Sample') +
+  coord_flip() + 
+  theme_minimal(base_family = "Times New Roman") + 
+  geom_text(aes(label=prop), hjust = -0.5, size=3.5) +
+  ylim(0,1) +
+  scale_fill_manual(values = c('grey','red')) +
+  theme(text = element_text(size = 16, family = 'A'))
+
+pcs_bar
+
+# Save Plot
+ggsave("pcs_bar_plot.png", plot = pcs_bar, width = 4, height = 3, dpi = 300)
+
+#compute cloud
+#set.seed(1)
+#wordcloud(words = pcs_cloud_df$word, freq = pcs_cloud_df$freq, min.freq = 1,
+          #random.order=FALSE, rot.per=0.2,
+          #colors=brewer.pal(8, "Dark2"))
+
+
+#ggarrange(pcs_bar, gwi_bar, ncol = 2, nrow = 1)
+#table(clean$participant_type)
+print(getwd())
+```
+
+
+# Feature Engineering Post-EDA for dimension reduction and Outliers
+## Creating Binary Variables
+```{r}
+clean$vacc_bi <- if_else(clean$vacc_inf_diff >= 0, 1, 2)
+clean$vacc_bi[is.na(clean$vacc_bi)] <- 0
+clean$vacc_bi <- as.character(clean$vacc_bi)
+clean$vacc_bi[clean$vacc_bi == 0] <- 'Never'
+clean$vacc_bi[clean$vacc_bi == 1] <- 'After'
+clean$vacc_bi[clean$vacc_bi == 2] <- 'Before'
+clean$vacc_bi <- as.factor(clean$vacc_bi)
+
+clean$neuro_bi <- if_else(clean$neuro > 0, 1, 0)
+clean$neuro_bi <- as.factor(clean$neuro_bi)
+
+clean$cardio_bi <- if_else(clean$cardio > 0, 1, 0)
+clean$cardio_bi <- as.factor(clean$cardio_bi)
+
+clean$metabo_bi <- if_else(clean$metabo > 0, 1, 0)
+clean$metabo_bi <- as.factor(clean$metabo_bi)
+
+clean$auto_bi <- if_else(clean$auto > 0, 1, 0)
+clean$auto_bi <- as.factor(clean$auto_bi)
+
+clean$menopause_status <- as.character(clean$menopause_status)
+clean$meno_bi <- if_else(clean$menopause_status == "NA", 0, 1)
+clean$meno_bi <- as.factor(clean$meno_bi)
+
+clean$inc_bi <- if_else((clean$income == 3 | clean$income == 4 | clean$income == 5), 1, 0)
+clean$inc_bi <- as.factor(clean$inc_bi)
+```
+
+
+```{r}
+#vaccine occurrence in relation to covid infection x. pcs diagnosis
+vaccbi <- ggplot(clean, aes(vacc_bi, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(vaccbi, title = "Vaccine Date in Relation to COVID Infection Date by PCS Diagnosis", xlab = 'Occurrence',ylab = 'Count', legend.title = 'Group')
+```
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$vacc_bi)
+```
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$neuro_bi)
+```
+
+
+```{r}
+#cardiovascular conditions x. pcs diagnosis
+cardiobi <- ggplot(clean, aes(cardio_bi, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count') +
+  theme_minimal()
+ggpar(cardiobi, title = "Cardiovascular Conditions to PCS Diagnosis", xlab = 'Status',ylab = 'Count', legend.title = 'Group')
+```
+
+
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$cardio_bi)
+```
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$metabo_bi)
+```
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$auto_bi)
+```
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$meno_bi)
+```
+
+```{r}
+#chisquare test of association
+chisq.test(clean$pcs_diag, clean$inc_bi)
+```
+
+# Subtype Analysis - Identifying Top symptom profiles based on primary, secondary, and tertiary reported symptom domains
+
+# Manual Data reduction into 3 symptom domains (physical, mental health, sleep)
+
+## Physical symptoms - binary coded if reported
+```{r}
+# Persistent headache
+clean$headache <- if_else(clean$headache_2 > 0, 1, 0)
+
+# Combine ear, nose, and throat soreness or pain
+clean$ent <- if_else(clean$nose_2 > 0 | clean$throat > 0 | clean$ear > 0, 1, 0)
+
+# Overall fatigue
+clean$fatigue <- if_else(clean$fatigue_2 > 0 | clean$actfatigue_2 > 0, 1, 0)
+
+# Combine reduced smell and taste into one - aguesia
+clean$aguesia <- if_else(clean$smell_2 > 0 | clean$taste_2 > 0, 1, 0)
+
+# Combine all lungs problems into one
+clean$lungs <- if_else(clean$chest_2 > 0 | clean$breathrest_2 > 0 | 
+                         clean$breathwalk_2 > 0 | clean$wheezing_2 > 0 | clean$cough_2 > 0, 1, 0)
+
+# Combine lightheadedness, faintness, sweat changes, and GI upset into one category - vasomotor dysfunction
+clean$vasomotor <- if_else(clean$lighthead_2 > 0 | clean$faint_2 > 0 | clean$sweat_2 > 0 | clean$gastro_2 > 0, 1, 0)
+
+# Total amount of phyiscal symptoms reported
+clean$physical_sum <- clean$headache + clean$ent + clean$fatigue + 
+  clean$aguesia + clean$lungs + clean$vasomotor
+```
+
+# Mental Health and Brain Fog - binary coded if reported
+```{r}
+clean$brainfog <- if_else(clean$brainfog_2 > 0, 1, 0)
+clean$anxiety <- if_else(clean$anxiety_2 > 0, 1, 0)
+clean$depression <- if_else(clean$depression_2 > 0, 1, 0)
+# Total amount of mental health and cognitive symptoms
+clean$mental_sum <- (clean$anxiety + clean$depression + clean$brainfog) 
+```
+
+```{R}
+table(clean$brainfog_2)
+table(clean$anxiety_2)
+table(clean$depression_2)
+
+# Number of people without brain fog and only depression or anxiety
+clean$brainfog_test <- if_else(clean$brainfog_2 == 0 & clean$mental_sum > 0, 1, 0)
+table(clean$brainfog_test)
+
+# Number of people with only brain fog and no depression or anxiety
+clean$brainfog_test2 <- if_else(clean$brainfog_2 >0 & clean$mental_sum == 1, 1, 0)
+table(clean$brainfog_test2)
+```
+
+# Sleep Symptoms - binary coded if reported   
+```{r}
+clean$unrefresh <- if_else(clean$unrefresh_2 > 0, 1, 0)
+clean$diffsleep <- if_else(clean$diffsleep_2 > 0, 1, 0)
+clean$daysleep <- if_else(clean$daysleep_2 > 0, 1, 0)
+# Total amount of sleep symptoms reported
+clean$sleep_sum <- (clean$unrefresh + clean$diffsleep + clean$daysleep)
+```
+
+# Total number of symptoms reported and proportions of each category of symptoms
+```{r}
+clean$total_sum <- clean$physical_sum + clean$mental_sum + clean$sleep_sum
+clean$phys_prop <- round(clean$physical_sum / clean$total_sum, 2)
+clean$ment_prop <- round(clean$mental_sum / clean$total_sum, 2)
+clean$sleep_prop <- round(clean$sleep_sum / clean$total_sum, 2)
+```
+
+# Distributions of proportions of each type of symptom domain - distribution has nice variation
+```{r}
+hist(clean$phys_prop)
+hist(clean$ment_prop)
+hist(clean$sleep_prop)
+```
+
+# Creating combined profile of symptom proportions
+```{r}
+# Create profile variable
+clean$phys_ment_sleep <- paste(clean$phys_prop, clean$ment_prop, clean$sleep_prop, sep = ',')
+
+# Look at all combinations of symptom domains
+table(clean$phys_ment_sleep) # Can see about 88 different subtypes
+
+# Update Nan, Nan, Nan subtype to 0, 0, 0 (this is healthy people without any symptoms)
+clean$phys_ment_sleep[clean$phys_ment_sleep == 'NaN,NaN,NaN'] <- '0,0,0'
+clean$phys_prop[is.na(clean$phys_prop)] <- 0
+clean$ment_prop[is.na(clean$ment_prop)] <- 0
+clean$sleep_prop[is.na(clean$sleep_prop)] <- 0
+```
+
+# Clustering Symptom Profile Proportions into Subtypes
+## Most subtypes are very similar, so we can further reduce using clustering to separate the data space 
+```{r}
+#View(clean)
+# Run K means
+set.seed(2)
+kmns_symp <- kmeans(clean[ , c(186:188)], centers = 6)  # Proportion of sleep, mental health, and physical symptoms
+
+# Look at K means information
+kmns_symp
+## 
+
+# Visualize clusters
+cluster_plot <- fviz_cluster(kmns_symp, data = clean[ , c(186:188)], geom = c('point','text')) + theme_minimal()
+
+ggsave('cluster_plot.png', cluster_plot, dpi = 300)
+
+# Cluster assignments as grouping variable
+clean$cluster <- as.factor(kmns_symp$cluster)
+
+summary(clean$cluster)
+
+#ANOVAS and cog data
+oneway.test(log(vs_a_rt_mn_l) ~ cluster, data = clean) # p = .01325
+oneway.test(log(vs_a_rt_mn_s) ~ cluster, data = clean) # p = .01138
+oneway.test(log(vs_p_rt_mn_s) ~ cluster, data = clean) # p = .003297
+oneway.test(log(vs_p_rt_mn_l) ~ cluster, data = clean) # p = .005468
+oneway.test(log(ds_rt_mn) ~ cluster, data = clean) # p = .03699
+oneway.test(log(t_r) ~ cluster, data = clean) # p = .04045
+chisq.test(clean$cluster, clean$pcs_diag)
+table(clean$cluster, clean$pcs_diag)
+
+
+
+```
+```{r}
+# Summary cluster values for data vis
+p <- c(.042, .409, .012, 0, .978, .562)
+m <- c(0, .172, .956, 0, .00596, .399)
+s <- c(.958, .418, .032, 0, .016, .039)
+l <- c(7, 115, 27, 4, 58, 67)
+n <- c(12, 143, 41, 404, 114, 79)
+pr <- round(l/n, 2)
+
+cluster_df <- data.frame(p, m, s, l, n, pr)
+#View(cluster_df)
+
+```
+
+
+
+# Bringing in Item Level PROMIS Cog to un-do reverse-scoring
+```{R}
+#setwd("~/Post COVID Study")
+
+#REad in files
+cog1 <- read_csv('cog_c1.csv')
+cog3 <- read_csv('cog_c3.csv')
+cog4 <- read_csv('cog_c4.csv')
+
+#View(cog4)
+
+#Update column names
+colnames(cog4)[1] <- 'prolific_id'
+
+#Combine datasets
+promis_list <- list(cog1, cog3, cog4)
+
+#merge all data frames together
+promis <- Reduce(function(x, y) merge(x, y, all=TRUE), promis_list)
+
+#Drop NA rows
+#View(promis)
+promis <- drop_na(promis)
+
+
+#Re-do scoring
+promis$promis_cog_1[promis$promis_cog_1 == 1] <- 50
+promis$promis_cog_2[promis$promis_cog_2 == 1] <- 50
+promis$promis_cog_3[promis$promis_cog_3 == 1] <- 50
+promis$promis_cog_4[promis$promis_cog_4 == 1] <- 50
+promis$promis_cog_5[promis$promis_cog_5 == 1] <- 50
+promis$promis_cog_6[promis$promis_cog_6 == 1] <- 50
+promis$promis_cog_7[promis$promis_cog_7 == 1] <- 50
+promis$promis_cog_8[promis$promis_cog_8 == 1] <- 50
+
+promis$promis_cog_1[promis$promis_cog_1 == 2] <- 40
+promis$promis_cog_2[promis$promis_cog_2 == 2] <- 40
+promis$promis_cog_3[promis$promis_cog_3 == 2] <- 40
+promis$promis_cog_4[promis$promis_cog_4 == 2] <- 40
+promis$promis_cog_5[promis$promis_cog_5 == 2] <- 40
+promis$promis_cog_6[promis$promis_cog_6 == 2] <- 40
+promis$promis_cog_7[promis$promis_cog_7 == 2] <- 40
+promis$promis_cog_8[promis$promis_cog_8 == 2] <- 40
+
+promis$promis_cog_1[promis$promis_cog_1 == 3] <- 30
+promis$promis_cog_2[promis$promis_cog_2 == 3] <- 30
+promis$promis_cog_3[promis$promis_cog_3 == 3] <- 30
+promis$promis_cog_4[promis$promis_cog_4 == 3] <- 30
+promis$promis_cog_5[promis$promis_cog_5 == 3] <- 30
+promis$promis_cog_6[promis$promis_cog_6 == 3] <- 30
+promis$promis_cog_7[promis$promis_cog_7 == 3] <- 30
+promis$promis_cog_8[promis$promis_cog_8 == 3] <- 30
+
+promis$promis_cog_1[promis$promis_cog_1 == 4] <- 20
+promis$promis_cog_2[promis$promis_cog_2 == 4] <- 20
+promis$promis_cog_3[promis$promis_cog_3 == 4] <- 20
+promis$promis_cog_4[promis$promis_cog_4 == 4] <- 20
+promis$promis_cog_5[promis$promis_cog_5 == 4] <- 20
+promis$promis_cog_6[promis$promis_cog_6 == 4] <- 20
+promis$promis_cog_7[promis$promis_cog_7 == 4] <- 20
+promis$promis_cog_8[promis$promis_cog_8 == 4] <- 20
+
+promis$promis_cog_1[promis$promis_cog_1 == 5] <- 10
+promis$promis_cog_2[promis$promis_cog_2 == 5] <- 10
+promis$promis_cog_3[promis$promis_cog_3 == 5] <- 10
+promis$promis_cog_4[promis$promis_cog_4 == 5] <- 10
+promis$promis_cog_5[promis$promis_cog_5 == 5] <- 10
+promis$promis_cog_6[promis$promis_cog_6 == 5] <- 10
+promis$promis_cog_7[promis$promis_cog_7 == 5] <- 10
+promis$promis_cog_8[promis$promis_cog_8 == 5] <- 10
+
+promis$promis_cog_1 <- promis$promis_cog_1 / 10
+promis$promis_cog_2 <- promis$promis_cog_2 / 10
+promis$promis_cog_3 <- promis$promis_cog_3 / 10
+promis$promis_cog_4 <- promis$promis_cog_4 / 10
+promis$promis_cog_5 <- promis$promis_cog_5 / 10
+promis$promis_cog_6 <- promis$promis_cog_6 / 10
+promis$promis_cog_7 <- promis$promis_cog_7 / 10
+promis$promis_cog_8 <- promis$promis_cog_8 / 10
+
+promis$promis_score <- promis$promis_cog_1+promis$promis_cog_2+promis$promis_cog_3+promis$promis_cog_4+
+  promis$promis_cog_5+promis$promis_cog_6+promis$promis_cog_7+promis$promis_cog_8
+
+promis_list <- c('prolific_id', 'promis_score')
+promis_trim <- promis[ , promis_list] 
+#View(promis_trim)
+
+# Fix incorrect IDs before merging
+promis_trim$prolific_id[promis_trim$prolific_id == '6297567582d2ed2d88ae0450@email.prolific.co'] <- '6297567582d2ed2d88ae0450'
+promis_trim$prolific_id[promis_trim$prolific_id == '61097e7150203244f66caf5861097e7150203244f66caf58'] <- '61097e7150203244f66caf58'
+promis_trim$prolific_id[promis_trim$prolific_id == '63644514902f60174b4b29a1@email.prolific.co'] <- '63644514902f60174b4b29a1'
+promis_trim$prolific_id[promis_trim$prolific_id == '1/14/2021'] <- '55ae64defdf99b3f864653e7'
+promis_trim$prolific_id[promis_trim$prolific_id == '64385d841e0d55be48c9c8e4@email.prolific.co'] <- '64385d841e0d55be48c9c8e4'
+
+promis_trim$prolific_id[promis_trim$prolific_id == '500'] <- '28'
+promis_trim$prolific_id[promis_trim$prolific_id == '502'] <- '29'
+promis_trim$prolific_id[promis_trim$prolific_id == '510'] <- '67'
+promis_trim$prolific_id[promis_trim$prolific_id == '508'] <- '63'
+promis_trim$prolific_id[promis_trim$prolific_id == '512'] <- '68'
+promis_trim$prolific_id[promis_trim$prolific_id == '507'] <- '57'
+promis_trim$prolific_id[promis_trim$prolific_id == '41'] <- '43'
+
+
+#Combine new scoring with other features
+clean <- merge(clean, promis_trim, by = 'prolific_id', all.x=T)
+
+
+```
+
+# Look at Reverse-Score Graph
+```{r}
+# PROMIS cog score (reverse scored) x. PCS diagnosis
+promiscog2 <- ggplot(clean, aes(promis_score, fill = pcs_diag)) + 
+  geom_histogram(color = 'black', position = 'fill', stat = 'count', bins = 32) +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "solid", color = "black")
+  #scale_x_discrete(limits = c(0:11))
+ggpar(promiscog2, title = "PROMIS Score by PCS Diagnosis", xlab = 'Score', ylab = 'Count', legend.title = 'Group')
+
+clean %>% filter(pcs_diag == 'PASC') %>% summarise(median = median(as.numeric(promis_score)))
+clean %>% filter(pcs_diag == 'Healthy') %>% summarise(median = median(as.numeric(promis_score)))
+```
+
+
+# Reduce some of the cognitive variable redundancy
+```{r}
+# R, n, and p values for each variable correlation.
+#rcorr(as.matrix(clean[ , (names(clean) %in% cog_corr)]), type="pearson")
+```
+
+
+# Making a Demographic Matched Sample to Compare Veterans to Civilians
+```{r}
+# Make matched Veteran/Civilian sample based on age, sex, and education
+# Fill in NA values for outcome variable
+samp_match <- matchit(participant_type ~ age + sex, clean, 
+                      method = 'exact', distance= 'glm', link = 'probit')
+samp_match
+summary(samp_match)
+```
+
+```{r}
+plot(summary(samp_match))
+```
+
+# Extract New Matched Sample from Matchit Object
+```{r}
+# Matched data can be used for training
+samp_match_data <- match.data(samp_match)
+#View(samp_match_data)
+
+dim(samp_match_data)
+# Create testing set with IDs NOT in match list
+id_list <- list(samp_match_data$prolific_id)
+
+#id_list
+#samp_match_test <- clean[!(clean$prolific_id %in% id_list), ]
+#View(samp_match_test)
+
+#dim(samp_match_test)
+```
+
+# Vertify proportion of outcome variable in new dataset is not different from parent dataset
+## This confirms that the matched sample does not have implicit bias in the outcome from matching
+```{r}
+#View(samp_match_data)
+table(samp_match_data$pcs_diag)
+dim(samp_match_data)[1]
+table(clean$pcs_diag)
+dim(clean)[1]
+
+#Two sample proportion test
+prop.test(x = c(114, 278),
+          n = c(298, 793))  # Non-sig difference between samples
+```
+
+# Data Preparation for Modeling
+* Check for highly correlated variables and collapse features
+* Train/Test Split
+* Downsample to get 50/50 PCS/Non for training set
+* Pipeline: Numerical (impute KNN, skew correction, center/scale), categorical (impute KNN, one hot encode)
+* Make separate training set with C-1 dummies for logistic regression
+* Use grid search with cross validation to find optimal models with training set
+* Assess performance on test set: sens, spec, ROC, acc, confusion matrix figure, 
+* Focus on feature importance/contributions for clinical interpretation
+* Check for multicollinearity issues
+
+## Remove Highly Correlated Features with less relationship with PCS outcome
+```{r}
+#View(clean)
+trim_all <- c('participant_type',
+'gender',
+'sex',
+'race',
+'ethnicity',
+'nicotine_status',
+'rehab_status',
+'unemployment_covid',
+'vaccine_menstrual',
+'med_access',
+'cpt_profile',
+'sus_att',
+'vacc_bi',
+'cardio_bi',
+'tbi_prob',
+'pcs_diag',
+'age',
+'datediff',
+'global_qol_scale',
+'initial_symptom_score',
+'pre_pandemic',
+'promis_score', 
+'hit6_score', 
+'fatigue_score',
+'gad7_tot_score', 
+'phq9_total', 
+'pss_overall_score',
+'social_support_score', 
+'dvprs_score', 
+'dyspnoea_12_score',
+'BMI', 
+'duration', 
+'psqi_glob', 
+'mental',
+'racial_stress',
+'fin_stress')
+
+cog_all <- c('promis_score', 'pcs_diag', 'cluster', 'datediff',
+             'vs_a_rt_mn_s', 'vs_a_rt_sd_s', 'vs_a_acc_s', 
+             'vs_p_rt_mn_s', 'vs_p_rt_sd_s', 'vs_p_acc_s',
+             'vs_a_rt_mn_l', 'vs_a_rt_sd_l', 'vs_a_acc_l',
+             'vs_p_rt_mn_l', 'vs_p_rt_sd_l', 'vs_p_acc_l',
+             'f_c_rt_mn', 'f_c_rt_sd', 'f_c_acc',
+             'f_i_rt_mn', 'f_i_rt_sd', 'f_i_acc',
+             'ds_acc', 'ds_rt_mn', 'ds_rt_sd', 
+             'read_rt_sum', 'type_rt_sum', 
+             'co', 'om', 't_r', 'd', 'hrt_m', 'hrt_s', 'hrt_v',
+             'b_diff', 'om_diff', 'co_diff', 
+             'rat_e_rt_mn', 'rat_e_rt_sd', 'rat_e_acc',
+             'rat_m_rt_mn', 'rat_m_rt_sd', 'rat_m_acc',
+             'rat_h_rt_mn', 'rat_h_rt_sd', 'rat_h_acc')
+
+cog_corr <- c('promis_score',  'ds_acc', 'ds_rt_mn', 'ds_rt_sd', 
+             'read_rt_sum', 'type_rt_sum', 
+             'co', 'om', 't_r', 'd', 'hrt_m', 'hrt_s', 'hrt_v',
+             'b_diff', 'om_diff', 'co_diff')
+              
+all <- c('participant_type',
+'gender',
+'sex',
+'race',
+'ethnicity',
+'nicotine_status',
+'rehab_status',
+'unemployment_covid',
+'vaccine_menstrual',
+'med_access',
+'cpt_profile',
+'sus_att',
+'vacc_bi',
+'cardio_bi',
+'tbi_prob',
+'pcs_diag',
+'age',
+'datediff',
+'global_qol_scale',
+'initial_symptom_score',
+'pre_pandemic',
+'promis_score', 
+'hit6_score', 
+'fatigue_score',
+'gad7_tot_score', 
+'phq9_total', 
+'pss_overall_score',
+'social_support_score', 
+'dvprs_score', 
+'dyspnoea_12_score',
+'BMI', 
+'duration', 
+'psqi_glob', 
+'mental',
+'racial_stress',
+'fin_stress',
+'cluster',
+'vs_a_rt_mn_s',
+'vs_a_rt_sd_s', 
+'vs_a_acc_s', 
+'vs_p_rt_mn_s', 
+'vs_p_rt_sd_s', 
+'vs_p_acc_s',
+'vs_a_rt_mn_l',
+'vs_a_rt_sd_l', 
+'vs_a_acc_l',
+'vs_p_rt_mn_l',
+'vs_p_rt_sd_l',
+'vs_p_acc_l',
+'f_c_rt_mn', 
+'f_c_rt_sd', 
+'f_c_acc',
+'f_i_rt_mn', 
+'f_i_rt_sd', 
+'f_i_acc',
+'ds_acc', 
+'ds_rt_mn',
+'ds_rt_sd',
+'read_rt_sum',
+'type_rt_sum', 
+'co', 
+'om', 
+'t_r', 
+'d', 
+'hrt_m', 
+'hrt_s', 
+'hrt_v',
+'b_diff',
+'om_diff',
+'co_diff', 
+'rat_e_rt_mn', 
+'rat_e_rt_sd', 
+'rat_e_acc',
+'rat_m_rt_mn', 
+'rat_m_rt_sd', 
+'rat_m_acc',
+'rat_h_rt_mn',
+'rat_h_rt_sd',
+'rat_h_acc')
+
+clean_id <- c('prolific_id', 'participant_type',
+'gender',
+'sex',
+'race',
+'ethnicity',
+'nicotine_status',
+'rehab_status',
+'unemployment_covid',
+'vaccine_menstrual',
+'med_access',
+'cpt_profile',
+'sus_att',
+'vacc_bi',
+'cardio_bi',
+'tbi_prob',
+'pcs_diag',
+'age',
+'datediff',
+'global_qol_scale',
+'initial_symptom_score',
+'pre_pandemic',
+'promis_score', 
+'hit6_score', 
+'fatigue_score',
+'gad7_tot_score', 
+'phq9_total', 
+'pss_overall_score',
+'social_support_score', 
+'dvprs_score', 
+'dyspnoea_12_score',
+'BMI', 
+'duration', 
+'psqi_glob', 
+'mental',
+'racial_stress',
+'fin_stress',
+'cluster',
+'vs_a_rt_mn_s',
+'vs_a_rt_sd_s', 
+'vs_a_acc_s', 
+'vs_p_rt_mn_s', 
+'vs_p_rt_sd_s', 
+'vs_p_acc_s',
+'vs_a_rt_mn_l',
+'vs_a_rt_sd_l', 
+'vs_a_acc_l',
+'vs_p_rt_mn_l',
+'vs_p_rt_sd_l',
+'vs_p_acc_l',
+'f_c_rt_mn', 
+'f_c_rt_sd', 
+'f_c_acc',
+'f_i_rt_mn', 
+'f_i_rt_sd', 
+'f_i_acc',
+'ds_acc', 
+'ds_rt_mn',
+'ds_rt_sd',
+'read_rt_sum',
+'type_rt_sum', 
+'co', 
+'om', 
+'t_r', 
+'d', 
+'hrt_m', 
+'hrt_s', 
+'hrt_v',
+'b_diff',
+'om_diff',
+'co_diff', 
+'rat_e_rt_mn', 
+'rat_e_rt_sd', 
+'rat_e_acc',
+'rat_m_rt_mn', 
+'rat_m_rt_sd', 
+'rat_m_acc',
+'rat_h_rt_mn',
+'rat_h_rt_sd',
+'rat_h_acc')
+
+View(rc)
+rural_vars <- c('prolific_id',
+                'participant_type',
+                'residence_location_type',
+                'pcs_diag',
+                'meds',
+                'neuro',
+                'mental',
+                'age',
+                'BMI',
+                'sex',
+                'race',
+                'phq9_total',
+                'gad7_tot_score',
+                'medsinfo',
+                'neuro',
+                'health_other_1',
+                'health_other_2',
+                'health_other_3',
+                'pss_overall_score',
+                'healthcare_access',
+                'financial_stress_1',
+                'fin_stress',
+                'racial_stress',
+                'social_support_score',
+                'unemployment_covid',
+                'menopause_status',
+                'tbi_prob',
+                'hit6_score',
+                'psqi_glob',
+                'edu_degree',
+                'income',
+                'income_2',
+                'household',
+                'household1',
+                'global_qol_scale',
+                'nicotine_status',
+                'alcohol_fx',
+                'substance_use_status'
+                )
+
+
+cog2 <- c('prolific_id',
+          'vs_a_rt_mn_s',
+'vs_a_rt_sd_s', 
+'vs_a_acc_s', 
+'vs_p_rt_mn_s', 
+'vs_p_rt_sd_s', 
+'vs_p_acc_s',
+'vs_a_rt_mn_l',
+'vs_a_rt_sd_l', 
+'vs_a_acc_l',
+'vs_p_rt_mn_l',
+'vs_p_rt_sd_l',
+'vs_p_acc_l',
+'f_c_rt_mn', 
+'f_c_rt_sd', 
+'f_c_acc',
+'f_i_rt_mn', 
+'f_i_rt_sd', 
+'f_i_acc',
+'ds_acc', 
+'ds_rt_mn',
+'ds_rt_sd',
+'read_rt_sum',
+'type_rt_sum', 
+'co', 
+'om', 
+'t_r', 
+'d', 
+'hrt_m', 
+'hrt_s', 
+'hrt_v',
+'b_diff',
+'om_diff',
+'co_diff', 
+'rat_e_rt_mn', 
+'rat_e_rt_sd', 
+'rat_e_acc',
+'rat_m_rt_mn', 
+'rat_m_rt_sd', 
+'rat_m_acc',
+'rat_h_rt_mn',
+'rat_h_rt_sd',
+'rat_h_acc',
+'cpt_profile',
+'sus_att')
+
+```
+
+```{r}
+# R, n, and p values for each variable correlation.
+#rcorr(as.matrix(clean[ , (names(clean) %in% all_nums)]), type="pearson")
+```
+
+# Defining Brain Fog 
+```{r}
+# R, n, and p values for each variable correlation.
+#rcorr(as.matrix(clean[ , (names(clean) %in% cog_all)]), type="pearson")
+```
+
+# Drop Unused variables and create final feature datasets
+```{r}
+# Whole, unmatched dataset
+final_data1 <- clean[ , (names(clean) %in% trim_all)]
+#View(final_data1)
+table(final_data1$tbi_prob)
+
+
+# Verify features
+#colnames(final_data1)
+#summary(final_data)
+#final_data1$race
+
+# Matched dataset for Veterans/Civilians
+match_data1 <- samp_match_data[ , (names(samp_match_data) %in% trim_all)]
+
+# Vetify features
+#colnames(match_data1)
+
+# Dropped/unmatched data used for testing
+#dropmatch_data1 <- samp_match_drop[ , (names(samp_match_drop) %in% trim_all)]
+
+
+
+
+
+#Cognitive data for brain fog
+cog_data1 <- clean[ , (names(clean) %in% cog_all)]
+
+cog_data2 <- clean[ , (names(clean) %in% all)]
+
+cog_id <- clean[ , (names(clean) %in% clean_id)]
+
+
+# Rural Vet Dataset
+rural_data <- rc[ , (names(rc) %in% rural_vars)]
+rural_cog <- clean[, (names(clean) %in% cog2)]
+
+rural <- merge(rural_data, rural_cog, by = "prolific_id", all.x = TRUE)
+View(rural)
+
+
+# Write the data frame to a CSV file
+write.csv(rural, 'rural.csv', row.names=FALSE)
+
+```
+
+# Export clean datasets for modeling
+```{r}
+
+final_data <- write_csv(final_data1, 'final_data.csv')
+match_data <- write_csv(match_data1, 'match_data.csv')
+#cog_data <- write_csv(cog_data1, 'cog_data.csv')
+cog_data2 <- write_csv(cog_data2, 'cog_data2.csv')
+cog_id_list <- write_csv(cog_id, 'cog_id_list.csv') 
+#clust_df <- write_csv(cluster_df, 'clust_df.csv')
+#View(match_data)
+```
+
+# Train/Test Pipeline
+## Remove highly correlated variables
+## Remove low variance variables
+## KNN for numerical and categorical imputation (BMI, vacc_inf_diff, etc)
+## Skewness Correction for numerical variables
+## Center and Scale Numerical
+## Make sure datatypes are factors (R will auto-one-hot-encode), need to one hot encode if using python and create c-1 dataset for linear models
+## Downsample to get 50/50 PCS/Non for training set
+## Use grid search with cross validation to find optimal models
+## Compare performance on test set and dropped set
+## Focus on feature importance/contributions for clinical interpretation
+
+## Hausekeep package for exporting results for papers
+
+# Demographic Stats for Paper Table
+```{r}
+# Age by participant type
+oneway.test(log(age) ~ participant_type, data = clean)
+
+chisq.test(clean$participant_type, clean$sex)
+chisq.test(clean$participant_type, clean$gender)
+chisq.test(clean$participant_type, clean$ethnicity)
+
+chisq.test(clean$participant_type, clean$residence_location_type)
+
+chisq.test(clean$participant_type, clean$race)
+chisq.test(clean$participant_type, clean$edu_degree)
+
+chisq.test(clean$participant_type, clean$pcs_diag)
+chisq.test(clean$participant_type, clean$vaccboost)
+
+
+oneway.test(log(promis_score) ~ pcs_diag, data = clean)
+```
+
+## Timestamp data 
+```{r}
+times <- read_csv('vet_timestamps.csv')
+#View(time_list)
+
+
+time_list <- c('participant_id','introduction_timestamp','part_2_link_timestamp')
+
+times <- times[ , (names(times) %in% time_list)]
+times <- drop_na(times)
+times$introduction_timestamp <- as_datetime(times$introduction_timestamp)
+
+times$timetaken <- times$part_2_link_timestamp-times$introduction_timestamp
+times$timetaken <- as.numeric(times$timetaken)
+
+str(times)
+
+#View(p1)
+p1 <- read_csv('prolific_1.csv')
+p2 <- read_csv('prolific_2.csv')
+p3 <- read_csv('prolific_3.csv')
+p4 <- read_csv('prolific_4.csv')
+p5 <- read_csv('prolific_5.csv')
+p6 <- read_csv('prolific_6.csv')
+
+p1 <- p1[ , 8]
+p2 <- p2[ , 8]
+p3 <- p3[ , 8]
+p4 <- p4[ , 8]
+p5 <- p5[ , 8]
+p6 <- p6[ , 8]
+
+#View(times2)
+times2 <- rbind(p1,p2,p3,p4,p5,p6)
+str(times2)
+
+
+colnames(times2)[1] <- 'timetaken'
+times2$timetaken <- round(times2$timetaken/60, 2)
+
+times2 <- drop_na(times2)
+time_all <- rbind(times2, times[, 4])
+time_all <- time_all %>% filter(timetaken < 300 & timetaken > 20)
+
+
+hist(time_all$timetaken)
+
+median(time_all$timetaken)
+mean(time_all$timetaken)
+sd(time_all$timetaken)
+min(time_all$timetaken)
+#View(time_all)
+
+table(clean$diagnosis_type)
+
+self <- clean %>% filter(diagnosis_type == 3)
+#View(self)
+
+prop.table(table(clean$pcs_diag))
+```
+```{r}
+#View(clean)
+
+prop.table(table(clean$pcs_diag))
+
+dim(clean)
+
+mean(clean$promis_cog_score)
+```
+
+
+# Random Sample for Follow Up
+
+```{r}
+table(cog_id_list$pcs_diag)
+
+prolific_cohort <- cog_id_list %>% filter((nchar(prolific_id) > 10) & (pcs_diag == "PASC")) %>% select('prolific_id')
+prolific_cohort
+
+prolific_cohort_list <- paste(prolific_cohort$prolific_id, collapse=",")
+
+
+set.seed(8)
+long_sample <- prolific_cohort[sample(nrow(prolific_cohort), size = 175, replace = FALSE), ]
+
+
+str(long_sample)
+
+long_samp_list_prep <- paste(long_sample, collapse=",")
+print(long_samp_list_prep)
+
+prolific_leftover <- setdiff(prolific_cohort_list, long_samp_list_prep)
+prolific_leftover
+print(prolific_leftover)
+```
+
+
+
